@@ -1,0 +1,49 @@
+x-common-env: &cenv
+  POSTGRES_USER: root
+  POSTGRES_PASSWORD: WeUseCl0ud0ps1
+  POSTGRES_DB: postgresql-local-v1-irai-yoga
+  VAULT_TOKEN: vault-root-password
+  VAULT_ADDR: http://vault:8200
+
+x-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 100M
+      max-file: "20"
+
+services:
+  postgres:
+    image: 'postgres:latest'
+    environment:
+        <<: *cenv
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/seed:/docker-entrypoint-initdb.d
+    <<: *default-logging
+  vault:
+    image: hashicorp/vault:latest
+    command: |
+      vault server -dev -dev-listen-address=0.0.0.0:8200
+    environment:
+      <<: *cenv
+      VAULT_DEV_ROOT_TOKEN_ID: "vault-root-password"
+    ports:
+      - "8200:8200"
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: [ "CMD", "vault", "status" ]
+    volumes:
+      - ./scripts/vault:/scripts
+    entrypoint: [ "sh", "-c", "vault server -dev -dev-listen-address=0.0.0.0:8200 & sleep 5 && sh /scripts/vault.sh && tail -f /dev/null"]
+
+volumes:
+  postgres-data:
