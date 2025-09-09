@@ -1,0 +1,7 @@
+package yoga.irai.server.enquiry;
+
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface EnquiryRepository extends JpaRepository<EnquiryEntity, UUID> {
+}
