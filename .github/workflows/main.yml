@@ -1,0 +1,360 @@
+name: Backend CI/CD Pipeline (Gradle)
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+  security-events: write
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*', '*.*.*']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  REGISTRY: harbor.yourcompany.com
+  IMAGE_NAME: ${{ github.repository }}
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+jobs:
+  validate-branch:
+    name: Validate Branch/Tag
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      docker_tag: ${{ steps.env.outputs.docker_tag }}
+      branch_valid: ${{ steps.validation.outputs.valid }}
+      domain: ${{ steps.domain.outputs.domain }}
+      is_production: ${{ steps.env.outputs.is_production }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Determine environment and tag
+        id: env
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "is_production=true" >> $GITHUB_OUTPUT
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "docker_tag=${TAG#v}" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "is_production=false" >> $GITHUB_OUTPUT
+            echo "docker_tag=staging" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/heads/develop ]]; then
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "is_production=false" >> $GITHUB_OUTPUT
+            echo "docker_tag=development" >> $GITHUB_OUTPUT
+          else
+            echo "environment=preview" >> $GITHUB_OUTPUT
+            echo "is_production=false" >> $GITHUB_OUTPUT
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9.-]/-/g' | tr '[:upper:]' '[:lower:]' | cut -c 1-128)
+            echo "docker_tag=preview-$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Determine domain
+        id: domain
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "domain=api.example.com" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            echo "domain=api.staging.example.com" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/heads/develop ]]; then
+            echo "domain=api.dev.example.com" >> $GITHUB_OUTPUT
+          else
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]' | cut -c 1-30)
+            echo "domain=api-preview-${SANITIZED_BRANCH}.example.com" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Validate branch name and tag
+        id: validation
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          BRANCH_REGEX="^(feat|fix|chore|test|docs|refactor|ci|style|perf|build)/[a-z0-9]+(-[a-z0-9]+)*$"
+          SEMVER_REGEX="^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
+          
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            if [[ "$TAG_NAME" =~ $SEMVER_REGEX ]]; then
+              echo "valid=true" >> $GITHUB_OUTPUT
+              echo "Tag $TAG_NAME is valid for production deployment"
+            else
+              echo "valid=false" >> $GITHUB_OUTPUT
+              echo "❌ Invalid tag format. Expected semantic version (e.g., v1.0.0 or 1.0.0)"
+              exit 1
+            fi
+          elif [[ "$GITHUB_REF" == refs/heads/main ]] || [[ "$GITHUB_REF" == refs/heads/develop ]]; then
+            echo "valid=true" >> $GITHUB_OUTPUT
+            echo "Main/develop branch is valid for deployment"
+          elif [[ "$BRANCH_NAME" =~ $BRANCH_REGEX ]]; then
+            echo "valid=true" >> $GITHUB_OUTPUT
+            echo "Feature branch $BRANCH_NAME is valid for preview deployment"
+          else
+            echo "valid=false" >> $GITHUB_OUTPUT
+            echo "❌ Branch name '$BRANCH_NAME' does not match required pattern: $BRANCH_REGEX"
+            exit 1
+          fi
+
+  gradle-build:
+    name: Build with Gradle
+    needs: validate-branch
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+          
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+        
+      - name: Build with Gradle
+        run: ./gradlew build -x test
+        
+      - name: Run tests
+        run: ./gradlew test
+        
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: build/test-results/
+          
+      - name: Upload build reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: build-reports
+          path: build/reports/
+
+  code-quality:
+    name: Code Quality Checks
+    needs: [validate-branch, gradle-build]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+          
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+        
+      - name: Check code style
+        run: ./gradlew checkstyleMain
+        
+      - name: Static code analysis
+        run: ./gradlew spotbugsMain
+        
+      - name: Dependency vulnerability check
+        run: ./gradlew dependencyCheckAnalyze
+        
+      - name: Upload dependency check report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-check-report
+          path: build/reports/dependency-check/
+
+  docker-build-push:
+    name: Build & Push Docker Image
+    needs: [validate-branch, gradle-build, code-quality]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Validate Docker tag format
+        id: validate-tag
+        run: |
+          TAG="${{ needs.validate-branch.outputs.docker_tag }}"
+          if [ -z "$TAG" ]; then
+            echo "❌ Docker tag is empty"
+            exit 1
+          fi
+          
+          if [[ ! "$TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$ ]]; then
+            echo "❌ Invalid Docker tag format: $TAG"
+            exit 1
+          else
+            echo "✅ Docker tag is valid: $TAG"
+          fi
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Log in to container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.validate-branch.outputs.docker_tag }}
+            type=sha,prefix=,suffix=,format=long
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            JAR_FILE=build/libs/*.jar
+
+  security-scan:
+    name: Security Scan
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate-branch.outputs.docker_tag }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  deploy:
+    name: Deploy to Environment
+    needs: [validate-branch, docker-build-push, security-scan]
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ needs.validate-branch.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        if: needs.validate-branch.outputs.environment != 'preview'
+        uses: aws-actions/aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          
+      - name: Setup Kubernetes tools
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          
+      - name: Deploy to Kubernetes
+        run: |
+          # Deploy using Helm or kubectl
+          helm upgrade --install backend-app ./k8s/charts/backend \
+            --namespace ${{ needs.validate-branch.outputs.environment }} \
+            --set image.tag=${{ needs.validate-branch.outputs.docker_tag }} \
+            --set ingress.host=${{ needs.validate-branch.outputs.domain }} \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --atomic --timeout 5m
+        env:
+          KUBECONFIG: $HOME/.kube/config
+          
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/backend-app -n ${{ needs.validate-branch.outputs.environment }} --timeout=300s
+          
+      - name: Run smoke tests
+        run: |
+          # Health check for backend service
+          URL="https://${{ needs.validate-branch.outputs.domain }}/health"
+          echo "Testing $URL"
+          curl -f --retry 5 --retry-delay 10 --max-time 30 $URL
+
+      - name: Determine webhook URL
+        id: webhook
+        run: |
+          if [ "${{ needs.validate-branch.outputs.environment }}" = "preview" ]; then
+            echo "webhook_url=${{ secrets.WEBHOOK_PREVIEW }}" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.validate-branch.outputs.environment }}" = "staging" ]; then
+            echo "webhook_url=${{ secrets.WEBHOOK_STAGING }}" >> $GITHUB_OUTPUT
+          else
+            echo "webhook_url=${{ secrets.WEBHOOK_PRODUCTION }}" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Notify deployment status
+        uses: slackapi/slack-github-action@v1.23.0
+        if: always()
+        with:
+          channel-id: 'deployments'
+          payload: |
+            {
+              "text": "Backend deployment to ${{ needs.validate-branch.outputs.environment }} ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Backend Deployment ${{ job.status }}*: ${{ github.repository }} to ${{ needs.validate-branch.outputs.environment }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment*\n${{ needs.validate-branch.outputs.environment }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version*\n${{ needs.validate-branch.outputs.docker_tag }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit*\n${GITHUB_SHA:0:7}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Domain*\n${{ needs.validate-branch.outputs.domain }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ steps.webhook.outputs.webhook_url }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
