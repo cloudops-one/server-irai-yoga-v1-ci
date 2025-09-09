@@ -31,7 +31,7 @@ jobs:
       is_production: ${{ steps.env.outputs.is_production }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: cloudops-one/checkout@v4
         
       - name: Determine environment and tag
         id: env
@@ -108,10 +108,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: cloudops-one/checkout@v4
         
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: cloudops-one/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -147,10 +147,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: cloudops-one/checkout@v4
         
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: cloudops-one/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: cloudops-one/checkout@v4
       
       - name: Validate Docker tag format
         id: validate-tag
