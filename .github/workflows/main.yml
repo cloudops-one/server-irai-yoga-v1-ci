@@ -136,6 +136,19 @@ jobs:
           distribution: 'temurin'
           cache: ${{ needs.detect-build-tool.outputs.build-tool }}
         
+      - name: Manual Cache Setup
+        run: |
+          # Create cache directories if they don't exist
+          if [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "maven" ]; then
+            echo "Setting up Maven cache"
+            mkdir -p ~/.m2/repository
+          elif [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "gradle" ]; then
+            echo "Setting up Gradle cache"
+            mkdir -p ~/.gradle/caches
+            mkdir -p ~/.gradle/wrapper
+          fi
+        shell: bash
+        
       - name: Build with detected tool
         run: |
           if [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "maven" ]; then
@@ -146,17 +159,6 @@ jobs:
             ./gradlew build -x test
           fi
         shell: bash
-        
-      - name: Cache dependencies
-        uses: cloudops-one/cache@v4
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-${{ needs.detect-build-tool.outputs.build-tool }}-${{ hashFiles('**/pom.xml', '**/build.gradle', '**/build.gradle.kts') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ needs.detect-build-tool.outputs.build-tool }}-
 
   docker-build:
     needs: [validate-branch, java-build]
