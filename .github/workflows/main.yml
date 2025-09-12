@@ -1,4 +1,5 @@
 name: CI/CD Pipeline
+
 permissions:
   actions: read
   contents: read
@@ -11,21 +12,8 @@ on:
     branches: [main]
 
 jobs:
-  compile:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: cloudops-one/checkout@v1
-        
-      - name: Compile application
-        run: |
-          echo "Running compilation step..."
-          # Add your compilation commands here
-          # For example: npm run build, mvn compile, make, etc.
-          echo "Compilation completed successfully"
-
   validate-branch:
-    needs: compile
+    # ... (no changes here, it's already good)
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.env.outputs.environment }}
@@ -34,7 +22,7 @@ jobs:
       domain: ${{ steps.domain.outputs.domain }}
     steps:
       - name: Checkout code
-        uses: cloudops-one/checkout@v1
+        uses: cloudops-one/checkout@v4
         
       - name: Determine environment and tag
         id: env
@@ -92,93 +80,85 @@ jobs:
             exit 1
           fi
 
-  # Code Coverage Test Job
+  gitleaks-scan:
+    needs: validate-branch
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: cloudops-one/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Run Gitleaks Security Scan
+        uses: cloudops-one/devops-ci/.github/actions/gitleaks-scan@main
+        with:
+          scan-path: '.'
+          fail-on-leak: true
+          config-path: '.gitleaks.toml'
+          redact-secrets: true
+
   code-coverage:
-    needs: [compile, validate-branch]
-    if: needs.validate-branch.outputs.branch_valid == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run code coverage check
-        uses: cloudops-one/.github/actions/code-coverage@main
-        with:
-          threshold-statements: ${{ env.THRESHOLD_STATEMENTS }}
-          threshold-branches: ${{ env.THRESHOLD_BRANCHES }}
-          threshold-functions: ${{ env.THRESHOLD_FUNCTIONS }}
-          threshold-lines: ${{ env.THRESHOLD_LINES }}
-          
-  # Centralized Quality Analysis Job
-  quality-analysis:
-    needs: [compile, validate-branch, code-coverage]
+    needs: gitleaks-scan
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
         
-      - name: Setup Node.js
-        uses: cloudops-one/setup-node@v1
+      - name: Run Code Coverage
+        uses: cloudops-one/devops-ci/.github/actions/code-coverage@main
         with:
           node-version: '20'
-          cache: 'npm'
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Run tests
-        run: npm test -- --watchAll=false
-        
-      - name: Run SonarQube Analysis
-        if: env.SONARQUBE_TOKEN != ''
+
+  sast-scan:
+    needs: validate-branch
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: cloudops-one/checkout@v4
+
+      - name: Run SAST Scan (SonarQube example)
+        # This is a placeholder. You need to use the action for your SAST tool.
+        # For a full example, see https://github.com/sonarsource/sonarcloud-github-action
+        uses: sonarsource/sonarcloud-github-action@master
+        with:
+          projectBaseDir: '.'
         env:
-          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
-        run: |
-          # Add your SonarQube analysis command here
-          echo "Running SonarQube analysis would happen here"
-          # Example: npx sonar-scanner -Dsonar.login=$SONARQUBE_TOKEN
-          
-      - name: Security Scan (SAST)
-        run: |
-          # Add your SAST security scan here
-          echo "Running SAST security scan"
-          # Example: npm audit || true
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  react-build:
-    needs: [validate-branch, quality-analysis, code-coverage]
+  java-build:
+    needs: [code-coverage, sast-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
         
-      - name: Setup Node.js
-        uses: cloudops-one/setup-node@v1
+      - name: Set up JDK 21 and Gradle Caching
+        uses: actions/setup-java@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-        
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Build React application
-        run: npm run build
-        
-      - name: Upload build artifacts
-        uses: cloudops-one/upload-artifact@v4
-        with:
-          name: react-build
-          path: build/
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
 
+      - name: Build and test with Gradle
+        run: ./gradlew build --no-daemon
+        
   docker-build:
-    needs: [validate-branch, react-build]
+    needs: [validate-branch, java-build, gitleaks-scan]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.set-tag.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
-      - name: Validate Docker tag format
-        id: validate-tag
+      
+      - name: Set and Validate Docker tag
+        id: set-tag
         run: |
           TAG="${{ needs.validate-branch.outputs.docker_tag }}"
           if [ -z "$TAG" ]; then
@@ -194,28 +174,22 @@ jobs:
             echo "✅ Docker tag is valid: $TAG"
           fi
           
-      - name: Set full image tag
-        id: set-tag
-        run: |
-          FULL_IMAGE_TAG="${{ secrets.HARBOR_REGISTRY }}/portal-irai-yoga/admin:${{ needs.validate-branch.outputs.docker_tag }}"
+          FULL_IMAGE_TAG="${{ secrets.HARBOR_REGISTRY }}/portal-irai-yoga/admin:$TAG"
           echo "image_tag=$FULL_IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "Image tag set to: $FULL_IMAGE_TAG"
-          
+      
       - name: Build Docker image (NO PUSH)
         run: |
-          docker build -t $FULL_IMAGE_TAG .
-        env:
-          FULL_IMAGE_TAG: ${{ secrets.HARBOR_REGISTRY }}/portal-irai-yoga/admin:${{ needs.validate-branch.outputs.docker_tag }}
+          docker build -t ${{ steps.set-tag.outputs.image_tag }} .
 
   security-scan:
     needs: docker-build
     runs-on: ubuntu-latest
     steps:
-      - name: Security scan (Container)
-        run: |
-          # Add your container security scan here
-          echo "Running container security scan"
-          # Example: docker scan $FULL_IMAGE_TAG
+      - name: Security scan
+        uses: cloudops-one/devops-ci/.github/actions/security-scan@main
+        with:
+          image-name: ${{ needs.docker-build.outputs.image_tag }}
 
   docker-push:
     needs: [docker-build, security-scan]
@@ -223,18 +197,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
+      
       - name: Login to Docker Registry
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
-          
+        shell: bash
+      
       - name: Push Docker image (AFTER security scan)
         run: |
           docker push ${{ needs.docker-build.outputs.image_tag }}
-          
+        shell: bash
+      
       - name: Logout from Docker Registry
         run: |
           docker logout ${{ secrets.HARBOR_REGISTRY }}
+        shell: bash
 
   deploy:
     needs: [validate-branch, docker-push]
@@ -246,13 +223,23 @@ jobs:
         uses: cloudops-one/checkout@v4
         
       - name: Setup environment
-        run: |
-          echo "Setting up ${{ needs.validate-branch.outputs.environment }} environment"
-          # Add environment setup commands here
+        uses: cloudops-one/devops-ci/.github/actions/setup-environment@main
+        with:
+          environment: ${{ needs.validate-branch.outputs.environment }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
       - name: Deploy to Kubernetes
-        run: |
-          echo "Deploying to Kubernetes"
-          # Add your Kubernetes deployment commands here
+        uses: cloudops-one/devops-ci/.github/actions/k8s-deploy@main
+        with:
+          environment: ${{ needs.validate-branch.outputs.environment }}
+          project-name: 'portal-irai-yoga'
+          component: 'admin'
+          docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+          domain-config: ${{ needs.validate-branch.outputs.domain }}
+          deploy-supporting-services: false
+
       - name: Determine webhook URL
         id: webhook
         run: |
@@ -265,6 +252,8 @@ jobs:
           fi
           
       - name: Notify deployment
-        run: |
-          echo "Notifying deployment to ${{ needs.validate-branch.outputs.environment }}"
-          # Add your notification logic here
+        uses: cloudops-one/devops-ci/.github/actions/notify@main
+        with:
+          webhook-url: ${{ steps.webhook.outputs.webhook_url }}
+          message: "✅ Deployment successful to ${{ needs.validate-branch.outputs.environment }}"
+          environment: ${{ needs.validate-branch.outputs.environment }}
