@@ -138,7 +138,7 @@ jobs:
         uses: cloudops-one/checkout@v4
         
       - name: Set up JDK 21 and Gradle Caching
-        uses: actions/setup-java@v4
+        uses: cloudops-one/devops-ci/.github/actions/build-java/action.yml
         with:
           distribution: 'temurin'
           java-version: '21'
