@@ -108,9 +108,10 @@ jobs:
       - name: Setup Java and Build
         uses: cloudops-one/setup-java@v4  # Reference to your local composite action
         with:
-          build-tool: 'gradle'
-          java-version: '21'
-          cache: 'true'
+         java-version: ${{ inputs.java-version }}
+         distribution: "temurin"  # Add this required parameter
+         cache: ${{ inputs.cache }}
+
         
   docker-build:
     needs: [validate-branch, java-build]
