@@ -105,15 +105,12 @@ jobs:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
         
-      - name: Set up JDK 21 and Gradle Caching
-        uses: cloudops-one/devops-ci/.github/actions/build-java@main
+      - name: Setup Java and Build
+        uses: cloudops-one/setup-java@v4  # Reference to your local composite action
         with:
-          distribution: 'temurin'
+          build-tool: 'gradle'
           java-version: '21'
-          cache: 'gradle'
-
-      - name: Build and test with Gradle
-        run: ./gradlew build --no-daemon
+          cache: 'true'
         
   docker-build:
     needs: [validate-branch, java-build]
