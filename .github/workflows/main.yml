@@ -21,7 +21,7 @@ jobs:
       domain: ${{ steps.domain.outputs.domain }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: cloudops-one/checkout@v4
         
       - name: Determine environment and tag
         id: env
@@ -80,19 +80,22 @@ jobs:
           fi
 
   gitleaks-scan:
-    needs: validate-branch
-    if: needs.validate-branch.outputs.branch_valid == 'true'
-    runs-on: ubuntu-latest
-    steps:
+     needs: validate-branch
+     if: needs.validate-branch.outputs.branch_valid == 'true'
+     runs-on: ubuntu-latest
+     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
         with:
           fetch-depth: 0
           
       - name: Run Gitleaks Security Scan
-        uses: zricethezav/gitleaks-action@v2
+        uses: cloudops-one/devops-ci/.github/actions/gitleaks-scan@main
         with:
+          scan-path: '.'
+          fail-on-leak: true
           config-path: '.gitleaks.toml'
+          redact-secrets: true
 
   java-build:
     needs: [validate-branch, gitleaks-scan]
