@@ -128,51 +128,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
-      - name: Setup Java
-        uses: cloudops-one/setup-java@v4
+      
+      - name: Gradle Build with Spotless
+        if: needs.detect-build-tool.outputs.build-tool == 'gradle'
+        uses: cloudops-one/devops-ci/.github/actions/gradle-build@main
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: ${{ needs.detect-build-tool.outputs.build-tool }}
-        
-      - name: Set execute permissions for gradlew
-        if: needs.detect-build-tool.outputs.build-tool == 'gradle'
-        run: |
-          if [ -f "gradlew" ]; then
-            echo "Setting execute permissions for gradlew"
-            chmod +x gradlew
-            ls -la gradlew
-          else
-            echo "gradlew file not found, generating one..."
-            ./gradlew --version || gradle wrapper --gradle-version 8.5
-            chmod +x gradlew
-          fi
-        shell: bash
-        
-      - name: Manual Cache Setup
-        run: |
-          # Create cache directories if they don't exist
-          if [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "maven" ]; then
-            echo "Setting up Maven cache"
-            mkdir -p ~/.m2/repository
-          elif [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "gradle" ]; then
-            echo "Setting up Gradle cache"
-            mkdir -p ~/.gradle/caches
-            mkdir -p ~/.gradle/wrapper
-          fi
-        shell: bash
-        
-      - name: Build with detected tool
-        run: |
-          if [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "maven" ]; then
-            echo "Building with Maven"
-            mvn clean compile -DskipTests
-          elif [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "gradle" ]; then
-            echo "Building with Gradle"
-            ./gradlew build -x test
-          fi
-        shell: bash
+          gradle-version: '8.5'
+          spotless-apply: 'true'
+          skip-tests: 'true'
+          
+      - name: Maven Build
+        if: needs.detect-build-tool.outputs.build-tool == 'maven'
+        uses: cloudops-one/devops-ci/.github/actions/maven-build@main
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          skip-tests: 'true'
 
   docker-build:
     needs: [validate-branch, java-build]
