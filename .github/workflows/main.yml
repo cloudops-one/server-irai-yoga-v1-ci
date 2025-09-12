@@ -98,7 +98,7 @@ jobs:
           redact-secrets: true
 
   detect-build-tool:
-    needs: validate-branch
+    needs: gitleaks-scan
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     outputs:
@@ -135,6 +135,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: ${{ needs.detect-build-tool.outputs.build-tool }}
+        
+      - name: Set execute permissions for gradlew
+        if: needs.detect-build-tool.outputs.build-tool == 'gradle'
+        run: |
+          if [ -f "gradlew" ]; then
+            echo "Setting execute permissions for gradlew"
+            chmod +x gradlew
+            ls -la gradlew
+          else
+            echo "gradlew file not found, generating one..."
+            ./gradlew --version || gradle wrapper --gradle-version 8.5
+            chmod +x gradlew
+          fi
+        shell: bash
         
       - name: Manual Cache Setup
         run: |
@@ -187,7 +201,7 @@ jobs:
             echo "✅ Docker tag is valid: $TAG"
           fi
           
-          FULL_IMAGE_TAG="${{ secrets.HARBOR_REGISTRY }}/portal-irai-yoga/admin:$TAG"
+          FULL_IMAGE_TAG="${{ secrets.HARBOR_REGISTRY }}/irai-yoga-v1/server:$TAG"
           echo "image_tag=$FULL_IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "Image tag set to: $FULL_IMAGE_TAG"
       
