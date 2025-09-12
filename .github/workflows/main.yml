@@ -80,10 +80,10 @@ jobs:
           fi
 
   gitleaks-scan:
-     needs: validate-branch
-     if: needs.validate-branch.outputs.branch_valid == 'true'
-     runs-on: ubuntu-latest
-     steps:
+    needs: validate-branch
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
         with:
@@ -97,9 +97,33 @@ jobs:
           config-path: '.gitleaks.toml'
           redact-secrets: true
 
-  java-build:
-    needs: [validate-branch, gitleaks-scan]
+  detect-build-tool:
+    needs: validate-branch
     if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      build-tool: ${{ steps.detect.outputs.build-tool }}
+    steps:
+      - name: Checkout code
+        uses: cloudops-one/checkout@v4
+        
+      - name: Detect build tool
+        id: detect
+        run: |
+          if [ -f "pom.xml" ]; then
+            echo "build-tool=maven" >> $GITHUB_OUTPUT
+            echo "Detected Maven project"
+          elif [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            echo "build-tool=gradle" >> $GITHUB_OUTPUT
+            echo "Detected Gradle project"
+          else
+            echo "build-tool=none" >> $GITHUB_OUTPUT
+            echo "No build tool detected, skipping build"
+          fi
+
+  java-build:
+    needs: [validate-branch, gitleaks-scan, detect-build-tool]
+    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -108,18 +132,31 @@ jobs:
       - name: Setup Java
         uses: cloudops-one/setup-java@v4
         with:
+          java-version: '17'
           distribution: 'temurin'
-          java-version: '21'  # Change this to your required Java version
-          cache: 'gradle'     # Change to 'maven' if using Maven
+          cache: ${{ needs.detect-build-tool.outputs.build-tool }}
         
-      - name: Build with Gradle
-        run: ./gradlew build
+      - name: Build with detected tool
+        run: |
+          if [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "maven" ]; then
+            echo "Building with Maven"
+            mvn clean compile -DskipTests
+          elif [ "${{ needs.detect-build-tool.outputs.build-tool }}" = "gradle" ]; then
+            echo "Building with Gradle"
+            ./gradlew build -x test
+          fi
         shell: bash
         
-      - name: Build with Maven (if using Maven)
-        if: false  # Set to true if using Maven instead of Gradle
-        run: mvn compile
-        shell: bash
+      - name: Cache dependencies
+        uses: cloudops-one/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-${{ needs.detect-build-tool.outputs.build-tool }}-${{ hashFiles('**/pom.xml', '**/build.gradle', '**/build.gradle.kts') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ needs.detect-build-tool.outputs.build-tool }}-
 
   docker-build:
     needs: [validate-branch, java-build]
@@ -162,19 +199,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: cloudpos-one/checkout@v4
+        uses: cloudops-one/checkout@v4
       
       - name: Login to Docker Registry
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
+        shell: bash
       
       - name: Push Docker image
         run: |
           docker push ${{ needs.docker-build.outputs.image_tag }}
+        shell: bash
       
       - name: Logout from Docker Registry
         run: |
           docker logout ${{ secrets.HARBOR_REGISTRY }}
+        shell: bash
 
   deploy:
     needs: [validate-branch, docker-push]
