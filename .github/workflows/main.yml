@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run code coverage check
-        uses: cloudops-one/.github/actions/code-coverage
+        uses: cloudops-one/.github/actions/code-coverage@main
         with:
           threshold-statements: ${{ env.THRESHOLD_STATEMENTS }}
           threshold-branches: ${{ env.THRESHOLD_BRANCHES }}
