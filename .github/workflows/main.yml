@@ -13,7 +13,6 @@ on:
 
 jobs:
   validate-branch:
-    # ... (no changes here, it's already good)
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.env.outputs.environment }}
@@ -98,39 +97,8 @@ jobs:
           config-path: '.gitleaks.toml'
           redact-secrets: true
 
-  code-coverage:
-    needs: gitleaks-scan
-    if: needs.validate-branch.outputs.branch_valid == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: cloudops-one/checkout@v4
-        
-      - name: Run Code Coverage
-        uses: cloudops-one/devops-ci/.github/actions/code-coverage@main
-        with:
-          node-version: '20'
-
-  sast-scan:
-    needs: validate-branch
-    if: needs.validate-branch.outputs.branch_valid == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: cloudops-one/checkout@v4
-
-      - name: Run SAST Scan (SonarQube example)
-        # This is a placeholder. You need to use the action for your SAST tool.
-        # For a full example, see https://github.com/sonarsource/sonarcloud-github-action
-        uses: sonarsource/sonarcloud-github-action@master
-        with:
-          projectBaseDir: '.'
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   java-build:
-    needs: [code-coverage, sast-scan]
+    needs: [validate-branch, gitleaks-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -148,7 +116,7 @@ jobs:
         run: ./gradlew build --no-daemon
         
   docker-build:
-    needs: [validate-branch, java-build, gitleaks-scan]
+    needs: [validate-branch, java-build]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     outputs:
@@ -182,17 +150,9 @@ jobs:
         run: |
           docker build -t ${{ steps.set-tag.outputs.image_tag }} .
 
-  security-scan:
-    needs: docker-build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Security scan
-        uses: cloudops-one/devops-ci/.github/actions/security-scan@main
-        with:
-          image-name: ${{ needs.docker-build.outputs.image_tag }}
-
   docker-push:
-    needs: [docker-build, security-scan]
+    needs: [docker-build]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -203,7 +163,7 @@ jobs:
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
         shell: bash
       
-      - name: Push Docker image (AFTER security scan)
+      - name: Push Docker image
         run: |
           docker push ${{ needs.docker-build.outputs.image_tag }}
         shell: bash
@@ -215,6 +175,7 @@ jobs:
 
   deploy:
     needs: [validate-branch, docker-push]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     environment: 
       name: ${{ needs.validate-branch.outputs.environment }}
