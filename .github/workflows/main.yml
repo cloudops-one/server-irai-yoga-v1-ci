@@ -146,7 +146,7 @@ jobs:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
       
-      - name: Gradle Build with Spotless
+      - name: Gradle Build with Tests and JaCoCo
         if: needs.detect-build-tool.outputs.build-tool == 'gradle'
         uses: cloudops-one/devops-ci/.github/actions/gradle-build@main
         with:
@@ -154,18 +154,64 @@ jobs:
           distribution: 'temurin'
           gradle-version: '8.5'
           spotless-apply: 'true'
-          skip-tests: 'true'
+          skip-tests: 'false'  # Changed to run tests for JaCoCo
+          jacoco-enabled: 'true'  # Added JaCoCo support
           
-      - name: Maven Build
+      - name: Maven Build with Tests and JaCoCo
         if: needs.detect-build-tool.outputs.build-tool == 'maven'
         uses: cloudops-one/devops-ci/.github/actions/maven-build@main
         with:
           java-version: '17'
           distribution: 'temurin'
-          skip-tests: 'true'
+          skip-tests: 'false'  # Changed to run tests for JaCoCo
+          jacoco-enabled: 'true'  # Added JaCoCo support
+
+  # JaCoCo Code Coverage for Java Backend
+  jacoco-code-coverage:
+    needs: [validate-branch, java-build]
+    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: cloudops-one/checkout@v4
+        
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          
+      - name: Run JaCoCo Code Coverage (Maven)
+        if: needs.detect-build-tool.outputs.build-tool == 'maven'
+        run: |
+          mvn test jacoco:prepare-agent jacoco:report -q
+          echo "JaCoCo report generated at target/site/jacoco/"
+          
+      - name: Run JaCoCo Code Coverage (Gradle)
+        if: needs.detect-build-tool.outputs.build-tool == 'gradle'
+        run: |
+          ./gradlew test jacocoTestReport --console=plain
+          echo "JaCoCo report generated at build/reports/jacoco/"
+          
+      - name: Upload JaCoCo Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: jacoco-coverage-report
+          path: |
+            ${{ needs.detect-build-tool.outputs.build-tool == 'maven' && 'target/site/jacoco/' || 'build/reports/jacoco/' }}
+          retention-days: 7
+          
+      - name: Publish JaCoCo Coverage Report
+        uses: madrapps/jacoco-report@v1.6.1
+        with:
+          paths: |
+            ${{ needs.detect-build-tool.outputs.build-tool == 'maven' && 'target/site/jacoco/jacoco.xml' || 'build/reports/jacoco/test/jacocoTestReport.xml' }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 70
+          min-coverage-changed-files: 60
 
   docker-build:
-    needs: [validate-branch, java-build]
+    needs: [validate-branch, jacoco-code-coverage]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -199,7 +245,7 @@ jobs:
           
       - name: Save Docker image
         run: |
-          IMAGE_TAG="Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           # Save the image to a tar file
           docker save -o docker-image.tar $IMAGE_TAG
           echo "Image saved to docker-image.tar"
