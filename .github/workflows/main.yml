@@ -176,7 +176,7 @@ jobs:
         uses: cloudops-one/checkout@v4
         
       - name: Run JaCoCo Code Coverage
-        uses: cloudops-one/devops-d/.github/actions/jacoco-coverage@main
+        uses: cloudops-one/devops-ci/.github/actions/jacoco-coverage@main
         with:
           build-tool: ${{ needs.detect-build-tool.outputs.build-tool }}
           min-line-coverage: 70
