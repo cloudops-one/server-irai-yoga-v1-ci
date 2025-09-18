@@ -192,7 +192,7 @@ jobs:
       - name: Build Docker image
         run: |
           # Build with a simple tag
-          IMAGE_TAG="Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           echo "Building image: $IMAGE_TAG"
           docker build -t $IMAGE_TAG .
           echo "Image built successfully"
@@ -236,7 +236,7 @@ jobs:
         uses: cloudops-one/devops-ci/.github/actions/trivy-scan@main
         with:
           scan-type: 'image'
-          scan-ref: 'Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}'
+          scan-ref: 'server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}'
           severity: 'CRITICAL,HIGH'
           scanners: 'vuln,secret,config'
           ignore-unfixed: 'true'
@@ -269,7 +269,7 @@ jobs:
         run: |
           # Tag the local image with the full registry path
           LOCAL_IMAGE="Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           
           echo "Tagging $LOCAL_IMAGE as $REMOTE_IMAGE"
           docker tag $LOCAL_IMAGE $REMOTE_IMAGE
