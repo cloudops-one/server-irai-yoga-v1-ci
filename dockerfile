@@ -1,34 +1,38 @@
 # =========================
 # Stage 1: Build the JAR
 # =========================
-FROM gradle:8.5-jdk17 AS builder
+FROM gradle:8.5-jdk21 AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy all project files
+# Copy Gradle files first (better caching)
+COPY build.gradle settings.gradle gradlew ./
+COPY gradle ./gradle
+
+# Download dependencies (cache layer)
+RUN ./gradlew dependencies || true
+
+# Copy source code
 COPY . .
 
-# Build the project (skip tests for speed in CI, optional)
-RUN gradle clean build -x test
+# Build the project (skip tests)
+RUN ./gradlew clean build -x test
 
 # =========================
-# Stage 2: Runtime image
+# Stage 2: Create Runtime Image
 # =========================
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jre AS runtime
 
-# Create non-root user
+# Create user and app directory
 RUN groupadd -r cloudops && useradd -r -g cloudops cloudops
-
-# Set working directory
 WORKDIR /app
 
-# Copy built JAR from builder stage
+# Copy the built JAR from builder stage
 COPY --from=builder /app/build/libs/*.jar /app/app.jar
 
-# Fix permissions
+# Change ownership
 RUN chown -R cloudops:cloudops /app
 USER cloudops
 
-# Run the JAR
+# Run the application
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
