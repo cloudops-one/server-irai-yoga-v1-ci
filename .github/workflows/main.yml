@@ -97,8 +97,25 @@ jobs:
           config-path: '.gitleaks.toml'
           redact-secrets: true
 
+  trivy-filesystem-scan:
+    needs: [validate-branch, gitleaks-scan]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: cloudops-one/checkout@v4
+        
+      - name: Run Trivy filesystem scan
+        uses: cloudops-one/devops-ci/.github/actions/trivy-scan@main
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          scanners: 'vuln,secret,config'
+          ignore-unfixed: 'false'
+
   detect-build-tool:
-    needs: gitleaks-scan
+    needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     outputs:
@@ -122,7 +139,7 @@ jobs:
           fi
 
   java-build:
-    needs: [validate-branch, gitleaks-scan, detect-build-tool]
+    needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
