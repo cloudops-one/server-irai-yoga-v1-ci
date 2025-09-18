@@ -9,16 +9,19 @@ WORKDIR /app
 COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
 
-# Fix wrapper permissions
+# Fix wrapper permissions for first run
 RUN chmod +x gradlew
 
-# Pre-download dependencies
+# Pre-download dependencies (cache layer)
 RUN ./gradlew dependencies || true
 
 # Copy the full source code
 COPY . .
 
-# ✅ Fix formatting automatically before build
+# ✅ Fix wrapper permissions again after final copy
+RUN chmod +x gradlew
+
+# ✅ Auto-fix formatting before build
 RUN ./gradlew spotlessApply
 
 # Build the project (skip tests for speed in CI/CD)
