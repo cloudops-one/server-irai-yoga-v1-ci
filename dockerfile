@@ -5,18 +5,21 @@ FROM gradle:8.5-jdk21 AS builder
 
 WORKDIR /app
 
-# Copy Gradle wrapper and configs (for caching)
+# Copy Gradle wrapper and configs first (cache optimization)
 COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
 
-# Pre-download dependencies (optional cache layer)
-RUN chmod +x gradlew && ./gradlew dependencies || true
+# Fix wrapper permissions
+RUN chmod +x gradlew
+
+# Pre-download dependencies
+RUN ./gradlew dependencies || true
 
 # Copy the full source code
 COPY . .
 
-# ✅ Fix gradlew permissions again after copy
-RUN chmod +x gradlew
+# ✅ Fix formatting automatically before build
+RUN ./gradlew spotlessApply
 
 # Build the project (skip tests for speed in CI/CD)
 RUN ./gradlew clean build -x test
@@ -29,6 +32,7 @@ FROM eclipse-temurin:21-jre
 RUN groupadd -r cloudops && useradd -r -g cloudops cloudops
 WORKDIR /app
 
+# Copy built JAR from builder
 COPY --from=builder /app/build/libs/*.jar /app/app.jar
 
 RUN chown -R cloudops:cloudops /app
