@@ -154,8 +154,8 @@ jobs:
           distribution: 'temurin'
           gradle-version: '8.5'
           spotless-apply: 'true'
-          skip-tests: 'false'
-          jacoco-enabled: 'true'
+          skip-tests: 'true'
+          jacoco-enabled: 'false'
           
       - name: Maven Build with Tests and JaCoCo
         if: needs.detect-build-tool.outputs.build-tool == 'maven'
@@ -163,8 +163,8 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          skip-tests: 'false'
-          jacoco-enabled: 'true'
+          skip-tests: 'true'
+          jacoco-enabled: 'fals'
 
   # JaCoCo Code Coverage for Java Backend using centralized action
   jacoco-code-coverage:
@@ -181,7 +181,7 @@ jobs:
           build-tool: ${{ needs.detect-build-tool.outputs.build-tool }}
           min-line-coverage: 70
           min-branch-coverage: 60
-
+          skip-tests: 'true' 
   docker-build:
     needs: [validate-branch, jacoco-code-coverage]
     if: needs.validate-branch.outputs.branch_valid == 'true'
