@@ -151,74 +151,120 @@ jobs:
     needs: [validate-branch, java-build]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.set-tag.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
       
-      - name: Set and Validate Docker tag
-        id: set-tag
+      - name: Validate Docker tag format
+        id: validate-tag
         run: |
           TAG="${{ needs.validate-branch.outputs.docker_tag }}"
           if [ -z "$TAG" ]; then
             echo "❌ Docker tag is empty"
             exit 1
           fi
-
-          # Docker tag validation
+          
           if [[ ! "$TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$ ]]; then
             echo "❌ Invalid Docker tag format: $TAG"
             echo "Docker tags must start with alphanumeric and contain only [a-zA-Z0-9_.-] (max 128 chars)"
             exit 1
+          else
+            echo "✅ Docker tag is valid: $TAG"
           fi
-
-          # Registry handling with fallback
-          REGISTRY="${{ secrets.HARBOR_REGISTRY }}"
-          if [ -z "$REGISTRY" ]; then
-            echo "⚠️ HARBOR_REGISTRY not set, using fallback 'irai-yoga'"
-            REGISTRY="irai-yoga"
-          fi
-
-          FULL_IMAGE_TAG="$REGISTRY/irai-yoga-v1/server:$TAG"
-          echo "✅ Docker tag is valid: $FULL_IMAGE_TAG"
-
-          echo "image_tag=$FULL_IMAGE_TAG" >> $GITHUB_OUTPUT
-      
-      - name: Build Docker image (NO PUSH)
+          
+      - name: Build Docker image
         run: |
-          docker build -t ${{ steps.set-tag.outputs.image_tag }} .
+          # Build with a simple tag
+          IMAGE_TAG="Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          echo "Building image: $IMAGE_TAG"
+          docker build -t $IMAGE_TAG .
+          echo "Image built successfully"
+          
+      - name: Save Docker image
+        run: |
+          IMAGE_TAG="Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          # Save the image to a tar file
+          docker save -o docker-image.tar $IMAGE_TAG
+          echo "Image saved to docker-image.tar"
+          
+      - name: Upload Docker image
+        uses: cloudops-one/upload-artifact@v4
+        with:
+          name: docker-image
+          path: docker-image.tar
+          retention-days: 1
 
-  docker-push:
-    needs: [docker-build]
+  # Trivy container scan runs after docker-build completes
+  trivy-container-scan:
+    needs: [validate-branch, docker-build]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: cloudops-one/checkout@v4
-      
+      - name: Download Docker image
+        uses: cloudops-one/download-artifact@v4
+        with:
+          name: docker-image
+          path: .
+
+      - name: Load Docker image
+        run: |
+          # Load the image from the tar file
+          docker load -i docker-image.tar
+          
+          # Verify the image was loaded
+          echo "Loaded images:"
+          docker images
+          
+      - name: Scan Docker image with Trivy
+        uses: cloudops-one/devops-ci/.github/actions/trivy-scan@main
+        with:
+          scan-type: 'image'
+          scan-ref: 'Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}'
+          severity: 'CRITICAL,HIGH'
+          scanners: 'vuln,secret,config'
+          ignore-unfixed: 'true'
+
+  docker-push:
+    needs: [docker-build, trivy-container-scan, validate-branch]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Docker image
+        uses: cloudops-one/download-artifact@v4
+        with:
+          name: docker-image
+          path: .
+
+      - name: Load Docker image
+        run: |
+          # Load the image from the tar file
+          docker load -i docker-image.tar
+          
+          # Verify the image was loaded
+          echo "Loaded images:"
+          docker images
+          
       - name: Login to Docker Registry
         run: |
-          if [ -n "${{ secrets.HARBOR_REGISTRY }}" ]; then
-            echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
-          else
-            echo "⚠️ No HARBOR_REGISTRY secret set, skipping registry login"
-          fi
-        shell: bash
-      
-      - name: Push Docker image
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
+          
+      - name: Tag and push Docker image
         run: |
-          docker push ${{ needs.docker-build.outputs.image_tag }}
-        shell: bash
-      
+          # Tag the local image with the full registry path
+          LOCAL_IMAGE="Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          
+          echo "Tagging $LOCAL_IMAGE as $REMOTE_IMAGE"
+          docker tag $LOCAL_IMAGE $REMOTE_IMAGE
+          
+          echo "Pushing: $REMOTE_IMAGE"
+          docker push "$REMOTE_IMAGE"
+          
+          echo "Image pushed successfully"
+          
       - name: Logout from Docker Registry
         run: |
-          if [ -n "${{ secrets.HARBOR_REGISTRY }}" ]; then
-            docker logout ${{ secrets.HARBOR_REGISTRY }}
-          else
-            echo "⚠️ No HARBOR_REGISTRY secret set, skipping registry logout"
-          fi
-        shell: bash
+          docker logout ${{ secrets.HARBOR_REGISTRY }}
 
   deploy:
     needs: [validate-branch, docker-push]
