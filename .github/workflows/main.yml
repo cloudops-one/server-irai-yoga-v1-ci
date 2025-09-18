@@ -165,18 +165,25 @@ jobs:
             echo "❌ Docker tag is empty"
             exit 1
           fi
-          
+
+          # Docker tag validation
           if [[ ! "$TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$ ]]; then
             echo "❌ Invalid Docker tag format: $TAG"
             echo "Docker tags must start with alphanumeric and contain only [a-zA-Z0-9_.-] (max 128 chars)"
             exit 1
-          else
-            echo "✅ Docker tag is valid: $TAG"
           fi
-          
-          FULL_IMAGE_TAG="${{ secrets.HARBOR_REGISTRY }}/irai-yoga-v1/server:$TAG"
+
+          # Registry handling with fallback
+          REGISTRY="${{ secrets.HARBOR_REGISTRY }}"
+          if [ -z "$REGISTRY" ]; then
+            echo "⚠️ HARBOR_REGISTRY not set, using fallback 'irai-yoga'"
+            REGISTRY="irai-yoga"
+          fi
+
+          FULL_IMAGE_TAG="$REGISTRY/irai-yoga-v1/server:$TAG"
+          echo "✅ Docker tag is valid: $FULL_IMAGE_TAG"
+
           echo "image_tag=$FULL_IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "Image tag set to: $FULL_IMAGE_TAG"
       
       - name: Build Docker image (NO PUSH)
         run: |
@@ -191,6 +198,7 @@ jobs:
         uses: cloudops-one/checkout@v4
       
       - name: Login to Docker Registry
+        if: secrets.HARBOR_REGISTRY != ''
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
         shell: bash
@@ -201,6 +209,7 @@ jobs:
         shell: bash
       
       - name: Logout from Docker Registry
+        if: secrets.HARBOR_REGISTRY != ''
         run: |
           docker logout ${{ secrets.HARBOR_REGISTRY }}
         shell: bash
