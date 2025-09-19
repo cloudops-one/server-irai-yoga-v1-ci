@@ -262,6 +262,12 @@ jobs:
    if: needs.validate-branch.outputs.branch_valid == 'true'
    runs-on: ubuntu-latest
    steps:
+    - name: Debug secrets
+      run: |
+        echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
+        echo "Username: ${{ secrets.HARBOR_USERNAME }}"
+        echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
+        
     - name: Download Docker image
       uses: cloudops-one/download-artifact@v4
       with:
@@ -271,30 +277,16 @@ jobs:
     - name: Load Docker image
       run: |
         docker load -i docker-image.tar
+        echo "Loaded images:"
         docker images
         
-    - name: Verify Docker
-      run: |
-        docker --version
-        
     - name: Login to Docker Registry
-      env:
-        HARBOR_REGISTRY: ${{ secrets.HARBOR_REGISTRY }}
-        HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
-        HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
       run: |
-        echo "Registry: $HARBOR_REGISTRY"
-        echo "Username: $HARBOR_USERNAME"
-        echo "Password length: ${#HARBOR_PASSWORD}"
-        
-        echo "$HARBOR_PASSWORD" | docker login \
-          --username "$HARBOR_USERNAME" \
-          --password-stdin \
-          "$HARBOR_REGISTRY"
+        echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
         
     - name: Tag and push Docker image
       run: |
-        LOCAL_IMAGE="Server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+        LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
         REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
         
         docker tag $LOCAL_IMAGE $REMOTE_IMAGE
