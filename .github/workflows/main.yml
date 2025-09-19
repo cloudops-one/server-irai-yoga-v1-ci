@@ -1,7 +1,7 @@
 name: CI/CD Pipeline
 
 permissions:
-  cloudops-one: read
+  actions: read
   contents: read
 
 on:
