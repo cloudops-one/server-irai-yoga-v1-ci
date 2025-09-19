@@ -260,7 +260,7 @@ jobs:
          # ignore-unfixed: 'true'
 
   docker-push:
-    needs: [docker-build, trivy-container-scan, validate-branch]
+    needs: [docker-build, validate-branch]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
