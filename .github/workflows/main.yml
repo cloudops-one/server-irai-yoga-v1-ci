@@ -78,6 +78,7 @@ jobs:
             echo "Branch name does not match required pattern"
             exit 1
           fi
+
   gitleaks-scan:
     needs: validate-branch
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -136,6 +137,7 @@ jobs:
             echo "build-tool=none" >> $GITHUB_OUTPUT
             echo "No build tool detected, skipping build"
           fi
+
   java-build:
     needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
@@ -162,9 +164,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           skip-tests: 'true'
-          jacoco-enabled: 'fals'
+          jacoco-enabled: 'false'
 
-  # JaCoCo Code Coverage for Java Backend using centralized action
   jacoco-code-coverage:
     needs: [validate-branch, java-build]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
@@ -179,7 +180,8 @@ jobs:
           build-tool: ${{ needs.detect-build-tool.outputs.build-tool }}
           min-line-coverage: 70
           min-branch-coverage: 60
-          skip-tests: 'true' 
+          skip-tests: 'true'
+
   docker-build:
     needs: [validate-branch, jacoco-code-coverage]
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -207,7 +209,6 @@ jobs:
           
       - name: Build Docker image
         run: |
-          # Build with a simple tag
           IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           echo "Building image: $IMAGE_TAG"
           docker build -t $IMAGE_TAG .
@@ -216,7 +217,6 @@ jobs:
       - name: Save Docker image
         run: |
           IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          # Save the image to a tar file
           docker save -o docker-image.tar $IMAGE_TAG
           echo "Image saved to docker-image.tar"
           
@@ -227,75 +227,50 @@ jobs:
           path: docker-image.tar
           retention-days: 1
 
-  # Trivy container scan runs after docker-build completes
-#  trivy-container-scan:
- #   needs: [validate-branch, docker-build]
-  #  if: needs.validate-branch.outputs.branch_valid == 'true'
-   # runs-on: ubuntu-latest
-    #steps:
-     # - name: Download Docker image
-      #  uses: cloudops-one/download-artifact@v4
-       # with:
-        #  name: docker-image
-         # path: .
-
-     # - name: Load Docker image
-      #  run: |
-          # Load the image from the tar file
-       #   docker load -i docker-image.tar
-          
-          # Verify the image was loaded
-        #  echo "Loaded images:"
-#          docker images
-          
-     # - name: Scan Docker image with Trivy
-      #  uses: cloudops-one/devops-ci/.github/actions/trivy-scan@main
-       # with:
-        #  scan-type: 'image'
-         # scan-ref: 'server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}'
-         # severity: 'CRITICAL,HIGH'
-         # scanners: 'vuln,secret,config'
-         # ignore-unfixed: 'true'
-
   docker-push:
-   needs: [docker-build, validate-branch]
-   if: needs.validate-branch.outputs.branch_valid == 'true'
-   runs-on: ubuntu-latest
-   steps:
-    - name: Debug secrets
-      run: |
-        echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
-        echo "Username: ${{ secrets.HARBOR_USERNAME }}"
-        echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
+    needs: [docker-build, validate-branch]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug secrets
+        run: |
+          echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
+          echo "Username: ${{ secrets.HARBOR_USERNAME }}"
+          echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
         
-    - name: Download Docker image
-      uses: cloudops-one/download-artifact@v4
-      with:
-        name: docker-image
-        path: .
+      - name: Download Docker image
+        uses: cloudops-one/download-artifact@v4
+        with:
+          name: docker-image
+          path: .
 
-    - name: Load Docker image
-      run: |
-        docker load -i docker-image.tar
-        echo "Loaded images:"
-        docker images
+      - name: Load Docker image
+        run: |
+          docker load -i docker-image.tar
+          echo "Loaded images:"
+          docker images
         
-    - name: Login to Docker Registry
-      run: |
-        echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
+      - name: Login to Docker Registry
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
         
-    - name: Tag and push Docker image
-      run: |
-        LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-        REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+      - name: Tag and push Docker image
+        run: |
+          LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          
+          echo "Tagging $LOCAL_IMAGE as $REMOTE_IMAGE"
+          docker tag $LOCAL_IMAGE $REMOTE_IMAGE
+          
+          echo "Pushing: $REMOTE_IMAGE"
+          docker push "$REMOTE_IMAGE"
+          
+          echo "Image pushed successfully"
         
-        docker tag $LOCAL_IMAGE $REMOTE_IMAGE
-        docker push "$REMOTE_IMAGE"
-        echo "Image pushed successfully"
-        
-    - name: Logout from Docker Registry
-      run: |
-        docker logout ${{ secrets.HARBOR_REGISTRY }}
+      - name: Logout from Docker Registry
+        run: |
+          docker logout ${{ secrets.HARBOR_REGISTRY }}
+
   deploy:
     needs: [validate-branch, docker-push]
     if: needs.validate-branch.outputs.branch_valid == 'true'
