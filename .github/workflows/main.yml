@@ -237,6 +237,19 @@ jobs:
           echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
           echo "Username: ${{ secrets.HARBOR_USERNAME }}"
           echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
+          # Check if secrets are set
+          if [ -z "${{ secrets.HARBOR_REGISTRY }}" ]; then
+            echo "❌ HARBOR_REGISTRY secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.HARBOR_USERNAME }}" ]; then
+            echo "❌ HARBOR_USERNAME secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.HARBOR_PASSWORD }}" ]; then
+            echo "❌ HARBOR_PASSWORD secret is not set"
+            exit 1
+          fi
         
       - name: Download Docker image
         uses: cloudops-one/download-artifact@v4
@@ -246,7 +259,10 @@ jobs:
 
       - name: Load Docker image
         run: |
+          # Load the image from the tar file
           docker load -i docker-image.tar
+          
+          # Verify the image was loaded
           echo "Loaded images:"
           docker images
         
@@ -256,6 +272,7 @@ jobs:
         
       - name: Tag and push Docker image
         run: |
+          # Tag the local image with the full registry path
           LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           
