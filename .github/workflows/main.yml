@@ -230,46 +230,14 @@ jobs:
   docker-push:
     needs: [docker-build, validate-branch]
     if: needs.validate-branch.outputs.branch_valid == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Debug secrets
-        run: |
-          echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
-          echo "Username: ${{ secrets.HARBOR_USERNAME }}"
-          echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
-        
-      - name: Download Docker image
-        uses: cloudops-one/download-artifact@v4
-        with:
-          name: docker-image
-          path: .
-
-      - name: Load Docker image
-        run: |
-          docker load -i docker-image.tar
-          echo "Loaded images:"
-          docker images
-        
-      - name: Login to Docker Registry
-        run: |
-          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
-        
-      - name: Tag and push Docker image
-        run: |
-          LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          
-          echo "Tagging $LOCAL_IMAGE as $REMOTE_IMAGE"
-          docker tag $LOCAL_IMAGE $REMOTE_IMAGE
-          
-          echo "Pushing: $REMOTE_IMAGE"
-          docker push "$REMOTE_IMAGE"
-          
-          echo "Image pushed successfully"
-        
-      - name: Logout from Docker Registry
-        run: |
-          docker logout ${{ secrets.HARBOR_REGISTRY }}
+    uses: cloudops-one/devops-ci/.github/actions/docker-push/action.yaml@main
+    with:
+      image_name: server-irai-yoga-v1-ci
+      docker_tag: ${{ needs.validate-branch.outputs.docker_tag }}
+    secrets:
+      HARBOR_REGISTRY: ${{ secrets.HARBOR_REGISTRY }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
 
   deploy:
     needs: [validate-branch, docker-push]
