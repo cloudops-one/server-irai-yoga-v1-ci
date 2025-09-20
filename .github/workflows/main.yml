@@ -230,7 +230,7 @@ jobs:
   docker-push:
     needs: [docker-build, validate-branch]
     if: needs.validate-branch.outputs.branch_valid == 'true'
-    uses: cloudops-one/devops-ci/.github/actions/docker-push/action.yaml@main
+    uses: cloudops-one/devops-ci/.github/actions/docker-push@main
     with:
       image_name: server-irai-yoga-v1-ci
       docker_tag: ${{ needs.validate-branch.outputs.docker_tag }}
