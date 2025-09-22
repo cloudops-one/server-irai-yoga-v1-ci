@@ -61,23 +61,19 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             if [[ "$TAG_NAME" =~ ^(v)?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "valid=true" >> $GITHUB_OUTPUT
-              echo "Tag $TAG_NAME is valid for live deployment"
             else
               echo "valid=false" >> $GITHUB_OUTPUT
-              echo "Invalid tag format. Expected: v1.0.0 or 1.0.0"
               exit 1
             fi
           elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
             echo "valid=true" >> $GITHUB_OUTPUT
-            echo "Main branch is valid for stage deployment"
           elif [[ "$BRANCH_NAME" =~ $BRANCH_REGEX ]]; then
             echo "valid=true" >> $GITHUB_OUTPUT
-            echo "Feature branch $BRANCH_NAME is valid for preview deployment"
           else
             echo "valid=false" >> $GITHUB_OUTPUT
-            echo "Branch name does not match required pattern"
             exit 1
           fi
+
   gitleaks-scan:
     needs: validate-branch
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -128,14 +124,11 @@ jobs:
         run: |
           if [ -f "pom.xml" ]; then
             echo "build-tool=maven" >> $GITHUB_OUTPUT
-            echo "Detected Maven project"
           elif [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
             echo "build-tool=gradle" >> $GITHUB_OUTPUT
-            echo "Detected Gradle project"
           else
             echo "build-tool=none" >> $GITHUB_OUTPUT
-            echo "No build tool detected, skipping build"
-          fi
+
   java-build:
     needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
@@ -144,7 +137,7 @@ jobs:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
       
-      - name: Gradle Build with Tests and JaCoCo
+      - name: Gradle Build
         if: needs.detect-build-tool.outputs.build-tool == 'gradle'
         uses: cloudops-one/devops-ci/.github/actions/gradle-build@main
         with:
@@ -155,7 +148,7 @@ jobs:
           skip-tests: 'true'
           jacoco-enabled: 'false'
           
-      - name: Maven Build with Tests and JaCoCo
+      - name: Maven Build
         if: needs.detect-build-tool.outputs.build-tool == 'maven'
         uses: cloudops-one/devops-ci/.github/actions/maven-build@main
         with:
@@ -166,7 +159,7 @@ jobs:
  
   sonarqube-backend-scan:
     needs: [validate-branch, java-build]
-    if: needs.validate-branch.outputs.branch_valid == 'true'
+    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool == 'gradle'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -189,10 +182,6 @@ jobs:
           project-name: 'server-irai-yoga-v1'
           docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
           branch-name: ${{ github.ref_name }}
-          sources-path: 'src/main/java'
-          coverage-path: 'build/reports/jacoco/test/jacocoTestReport.xml'
-          java-version: '17'
-          language: 'java'
 
   jacoco-code-coverage:
     needs: [validate-branch, java-build, sonarqube-backend-scan]
@@ -222,31 +211,18 @@ jobs:
         id: validate-tag
         run: |
           TAG="${{ needs.validate-branch.outputs.docker_tag }}"
-          if [ -z "$TAG" ]; then
-            echo "❌ Docker tag is empty"
-            exit 1
-          fi
-          
           if [[ ! "$TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$ ]]; then
             echo "❌ Invalid Docker tag format: $TAG"
-            echo "Docker tags must start with alphanumeric and contain only [a-zA-Z0-9_.-] (max 128 chars)"
             exit 1
-          else
-            echo "✅ Docker tag is valid: $TAG"
           fi
           
       - name: Build Docker image
         run: |
           IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          echo "Building image: $IMAGE_TAG"
           docker build -t $IMAGE_TAG .
-          echo "Image built successfully"
           
       - name: Save Docker image
-        run: |
-          IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          docker save -o docker-image.tar $IMAGE_TAG
-          echo "Image saved to docker-image.tar"
+        run: docker save -o docker-image.tar $IMAGE_TAG
           
       - name: Upload Docker image
         uses: cloudops-one/upload-artifact@v4
@@ -260,25 +236,6 @@ jobs:
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Debug secrets
-        run: |
-          echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
-          echo "Username: ${{ secrets.HARBOR_USERNAME }}"
-          echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
-          # Check if secrets are set
-          if [ -z "${{ secrets.HARBOR_REGISTRY }}" ]; then
-            echo "❌ HARBOR_REGISTRY secret is not set"
-            exit 1
-          fi
-          if [ -z "${{ secrets.HARBOR_USERNAME }}" ]; then
-            echo "❌ HARBOR_USERNAME secret is not set"
-            exit 1
-          fi
-          if [ -z "${{ secrets.HARBOR_PASSWORD }}" ]; then
-            echo "❌ HARBOR_PASSWORD secret is not set"
-            exit 1
-          fi
-        
       - name: Download Docker image
         uses: cloudops-one/download-artifact@v4
         with:
@@ -286,35 +243,21 @@ jobs:
           path: .
 
       - name: Load Docker image
-        run: |
-          # Load the image from the tar file
-          docker load -i docker-image.tar
-          
-          # Verify the image was loaded
-          echo "Loaded images:"
-          docker images
-        
+        run: docker load -i docker-image.tar
+
       - name: Login to Docker Registry
-        run: |
-          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
-        
+        run: echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
+
       - name: Tag and push Docker image
         run: |
-          # Tag the local image with the full registry path
           LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          
-          echo "Tagging $LOCAL_IMAGE as $REMOTE_IMAGE"
           docker tag $LOCAL_IMAGE $REMOTE_IMAGE
-          
-          echo "Pushing: $REMOTE_IMAGE"
-          docker push "$REMOTE_IMAGE"
-          
-          echo "Image pushed successfully"
-        
+          docker push $REMOTE_IMAGE
+
       - name: Logout from Docker Registry
-        run: |
-          docker logout ${{ secrets.HARBOR_REGISTRY }}
+        run: docker logout ${{ secrets.HARBOR_REGISTRY }}
+
   deploy:
     needs: [validate-branch, docker-push]
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -352,7 +295,6 @@ jobs:
             echo "webhook_url=${{ secrets.ZOHO_CLIQ_WEBHOOK_STAGE }}" >> $GITHUB_OUTPUT
           else
             echo "webhook_url=${{ secrets.ZOHO_CLIQ_WEBHOOK_LIVE }}" >> $GITHUB_OUTPUT
-          fi
           
       - name: Notify deployment
         uses: cloudops-one/devops-ci/.github/actions/notify@main
