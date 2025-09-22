@@ -180,16 +180,32 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # 🔍 Debug secrets before using them
+      - name: Debug SonarQube Secrets
+        run: |
+          if [ -z "${{ secrets.SONARQUBE_TOKEN }}" ]; then
+            echo "❌ SONARQUBE_TOKEN is missing"
+          else
+            echo "✓ SONARQUBE_TOKEN is set (masked)"
+          fi
+
+          if [ -z "${{ secrets.SONARQUBE_URL }}" ]; then
+            echo "❌ SONARQUBE_URL is missing"
+          else
+            echo "✓ SONARQUBE_URL is set (masked)"
+          fi
+
       - name: Run SonarQube Scan for Backend
         uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
         with:
-          sonar-token: ${{ secrets.SONARQUBE_TOKEN }}   # ✅ must exist in repo secrets
-          sonar-host-url: ${{ secrets.SONARQUBE_URL }}  # ✅ must exist in repo secrets
+          sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
+          sonar-host-url: ${{ secrets.SONARQUBE_URL }}
           project-key: 'server-irai-yoga-v1'
           project-name: 'server-irai-yoga-v1'
           docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
           branch-name: ${{ github.ref_name }}
-          
+
+
   jacoco-code-coverage:
     needs: [validate-branch, java-build, sonarqube-backend-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
