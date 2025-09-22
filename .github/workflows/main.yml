@@ -165,7 +165,7 @@ jobs:
           jacoco-enabled: 'false'
  
   sonarqube-backend-scan:
-    needs: [validate-branch, java-build]
+    needs: [validate-branch, java-build, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool == 'gradle'
     runs-on: ubuntu-latest
     steps:
@@ -183,17 +183,35 @@ jobs:
       # 🔍 Debug secrets before using them
       - name: Debug SonarQube Secrets
         run: |
+          echo "=== SonarQube Secrets Debug ==="
           if [ -z "${{ secrets.SONARQUBE_TOKEN }}" ]; then
-            echo "❌ SONARQUBE_TOKEN is missing"
+            echo "❌ SONARQUBE_TOKEN is missing or empty"
+            echo "Please set SONARQUBE_TOKEN secret in repository settings"
           else
-            echo "✓ SONARQUBE_TOKEN is set (masked)"
+            echo "✓ SONARQUBE_TOKEN is set (length: ${#SONARQUBE_TOKEN})"
           fi
-
+          
           if [ -z "${{ secrets.SONARQUBE_URL }}" ]; then
-            echo "❌ SONARQUBE_URL is missing"
+            echo "❌ SONARQUBE_URL is missing or empty"
+            echo "Please set SONARQUBE_URL secret in repository settings"
           else
-            echo "✓ SONARQUBE_URL is set (masked)"
+            echo "✓ SONARQUBE_URL is set: ${{ secrets.SONARQUBE_URL }}"
           fi
+          echo "================================"
+        env:
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+          
+      - name: Run SonarQube Scan for Backend
+        uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
+        with:
+          sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
+          sonar-host-url: ${{ secrets.SONARQUBE_URL }}
+          project-key: 'server-irai-yoga-v1'
+          project-name: 'server-irai-yoga-v1'
+          docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
+          branch-name: ${{ github.ref_name }}
+          sources-path: 'src'  # Explicitly set the source path
+          coverage-path: 'build/reports/jacoco/test/jacocoTestReport.xml'
 
       - name: Run SonarQube Scan for Backend
         uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
