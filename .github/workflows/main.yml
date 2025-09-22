@@ -166,8 +166,46 @@ jobs:
           skip-tests: 'true'
           jacoco-enabled: 'false'
 
+  sonarqube-scan:
+    needs: [validate-branch, trivy-filesystem-scan, java-build]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: cloudops-one/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: cloudops-one/setup-node@v1
+        with:
+          node-version: '20'
+
+      # Check if package-lock.json exists and choose appropriate install command
+      - name: Install dependencies
+        run: |
+          if [ -f "package-lock.json" ]; then
+            echo "Using npm ci (package-lock.json found)"
+            npm ci
+          else
+            echo "Using npm install (no package-lock.json found)"
+            npm install
+          fi
+        
+      - name: Run Centralized SonarQube Scan
+        uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan@main
+        with:
+          sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
+          sonar-host-url: ${{ secrets.SONARQUBE_URL }}
+          project-key: 'server-irai-yoga-v1'
+          project-name: 'server-irai-yoga-v1'
+          docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
+          branch-name: ${{ github.ref_name }}
+          sources-path: src
+          coverage-path: coverage/lcov.info
+
   jacoco-code-coverage:
-    needs: [validate-branch, java-build]
+    needs: [validate-branch, java-build, sonarqube-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
