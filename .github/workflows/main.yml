@@ -123,7 +123,7 @@ jobs:
         uses: cloudops-one/checkout@v4
       
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: cloudops-one/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
