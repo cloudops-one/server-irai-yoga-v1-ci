@@ -165,7 +165,7 @@ jobs:
           jacoco-enabled: 'false'
  
   sonarqube-backend-scan:
-    needs: [validate-branch, java-build, detect-build-tool]
+    needs: [validate-branch, java-build]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool == 'gradle'
     runs-on: ubuntu-latest
     steps:
@@ -173,25 +173,23 @@ jobs:
         uses: cloudops-one/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Setup Java
         uses: cloudops-one/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Run Gradle Build (skip tests & spotless)
-        run: |
-          chmod +x ./gradlew
-          ./gradlew clean build -x test -x spotlessCheck
+
       - name: Run SonarQube Scan for Backend
         uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
         with:
-          sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
-          sonar-host-url: ${{ secrets.SONARQUBE_URL }}
+          sonar-token: ${{ secrets.SONARQUBE_TOKEN }}   # ✅ must exist in repo secrets
+          sonar-host-url: ${{ secrets.SONARQUBE_URL }}  # ✅ must exist in repo secrets
           project-key: 'server-irai-yoga-v1'
           project-name: 'server-irai-yoga-v1'
           docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
           branch-name: ${{ github.ref_name }}
-
+          
   jacoco-code-coverage:
     needs: [validate-branch, java-build, sonarqube-backend-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
