@@ -154,8 +154,8 @@ jobs:
           distribution: 'temurin'
           gradle-version: '8.5'
           spotless-apply: 'true'
-          skip-tests: 'true'
-          jacoco-enabled: 'false'
+          skip-tests: 'false'  # Changed to false to run tests for SonarQube
+          jacoco-enabled: 'true'  # Enabled for code coverage
           
       - name: Maven Build with Tests and JaCoCo
         if: needs.detect-build-tool.outputs.build-tool == 'maven'
@@ -163,12 +163,12 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          skip-tests: 'true'
-          jacoco-enabled: 'false'
+          skip-tests: 'false'  # Changed to false to run tests for SonarQube
+          jacoco-enabled: 'true'  # Enabled for code coverage
 
-  sonarqube-scan:
-    needs: [validate-branch, trivy-filesystem-scan, java-build]
-    if: needs.validate-branch.outputs.branch_valid == 'true'
+  sonarqube-backend-scan:
+    needs: [validate-branch, java-build]
+    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -176,23 +176,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: cloudops-one/setup-node@v1
-        with:
-          node-version: '20'
-
-      # Check if package-lock.json exists and choose appropriate install command
-      - name: Install dependencies
-        run: |
-          if [ -f "package-lock.json" ]; then
-            echo "Using npm ci (package-lock.json found)"
-            npm ci
-          else
-            echo "Using npm install (no package-lock.json found)"
-            npm install
-          fi
-        
-      - name: Run Centralized SonarQube Scan
+      - name: Run SonarQube Scan for Backend
         uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan@main
         with:
           sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
@@ -201,11 +185,16 @@ jobs:
           project-name: 'server-irai-yoga-v1'
           docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
           branch-name: ${{ github.ref_name }}
-          sources-path: src
-          coverage-path: coverage/lcov.info
+          sources-path: 'src/main/java'  # Backend Java source path
+          # For Maven projects, coverage reports are typically in target/site/jacoco/jacoco.xml
+          # For Gradle projects, typically in build/reports/jacoco/test/jacocoTestReport.xml
+          coverage-path: ${{ needs.detect-build-tool.outputs.build-tool == 'maven' && 'target/site/jacoco/jacoco.xml' || 'build/reports/jacoco/test/jacocoTestReport.xml' }}
+          # Additional backend-specific properties
+          java-version: '17'
+          language: 'java'
 
   jacoco-code-coverage:
-    needs: [validate-branch, java-build, sonarqube-scan]
+    needs: [validate-branch, java-build, sonarqube-backend-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
@@ -218,7 +207,7 @@ jobs:
           build-tool: ${{ needs.detect-build-tool.outputs.build-tool }}
           min-line-coverage: 70
           min-branch-coverage: 60
-          skip-tests: 'true'
+          skip-tests: 'false'
 
   docker-build:
     needs: [validate-branch, jacoco-code-coverage]
