@@ -181,7 +181,7 @@ jobs:
           java-version: '17'
 
       - name: Run SonarQube Scan for Backend
-        uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan@main
+        uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
         with:
           sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
           sonar-host-url: ${{ secrets.SONARQUBE_URL }}
