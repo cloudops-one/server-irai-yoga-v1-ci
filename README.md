@@ -65,7 +65,7 @@ Run tests with:
 ./gradlew test
 ```
 
-## Build and Run
+## Build and Run..
 
 ```
 ./gradlew build
@@ -86,3 +86,4 @@ Application logs are stored in the `logs/` directory.
 ## Swagger Documentation
 
 API documentation is available at `http://localhost:8080/api/swagger-ui/index.html` after starting the application.
+
