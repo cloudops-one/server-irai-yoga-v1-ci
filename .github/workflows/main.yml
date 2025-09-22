@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run SonarQube Backend Analysis
-        uses: cloudops-one/devops-ci/.github/actions/sonarqube-backend@main
+        uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
         with:
           sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
           sonar-host-url: ${{ secrets.SONARQUBE_URL }}
