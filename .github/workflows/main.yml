@@ -237,7 +237,7 @@ jobs:
           echo "Image saved to docker-image.tar"
           
       - name: Upload Docker image
-        uses: actions/upload-artifact@v4
+        uses: cloudops-one/upload-artifact@v4
         with:
           name: docker-image
           path: docker-image.tar
