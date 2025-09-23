@@ -78,6 +78,7 @@ jobs:
             echo "Branch name does not match required pattern"
             exit 1
           fi
+
   gitleaks-scan:
     needs: validate-branch
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -136,6 +137,7 @@ jobs:
             echo "build-tool=none" >> $GITHUB_OUTPUT
             echo "No build tool detected, skipping build"
           fi
+
   java-build:
     needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
@@ -166,7 +168,7 @@ jobs:
 
   sonarqube-backend-scan:
     needs: [validate-branch, java-build, detect-build-tool]
-    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool == 'gradle'
+    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
       - name: Run SonarQube Backend Analysis
@@ -269,15 +271,17 @@ jobs:
           ignore-unfixed: 'true'
 
   docker-push:
-    needs: [validate-branch, trivy-container-scan]
+    needs: [docker-build, trivy-container-scan, validate-branch]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Debug secrets
+      - name: Debug Harbor secrets
         run: |
           echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
           echo "Username: ${{ secrets.HARBOR_USERNAME }}"
           echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
+          
+          # Validate secrets are set
           if [ -z "${{ secrets.HARBOR_REGISTRY }}" ]; then
             echo "❌ HARBOR_REGISTRY secret is not set"
             exit 1
@@ -290,6 +294,7 @@ jobs:
             echo "❌ HARBOR_PASSWORD secret is not set"
             exit 1
           fi
+          echo "✅ All Harbor secrets are configured"
           
       - name: Download Docker image
         uses: cloudops-one/download-artifact@v4
@@ -302,9 +307,11 @@ jobs:
           docker load -i docker-image.tar
           echo "Loaded images:"
           docker images
+          
       - name: Login to Harbor Registry
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
+          
       - name: Tag and push Docker image
         run: |
           LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
@@ -317,12 +324,14 @@ jobs:
           docker push "$REMOTE_IMAGE"
           
           echo "✅ Image pushed successfully!"
+          
       - name: Logout from Harbor Registry
         if: always()
         run: |
           docker logout ${{ secrets.HARBOR_REGISTRY }} || echo "Logout failed or already logged out"
+
   deploy:
-    needs: [validate-branch, docker-push]
+    needs: [docker-push, validate-branch]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     environment: 
