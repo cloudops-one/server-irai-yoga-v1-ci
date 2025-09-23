@@ -243,8 +243,37 @@ jobs:
           path: docker-image.tar
           retention-days: 1
 
+  trivy-container-scan:
+    needs: [validate-branch, docker-build]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Docker image
+        uses: cloudops-one/download-artifact@v4
+        with:
+          name: docker-image
+          path: .
+
+      - name: Load Docker image
+        run: |
+          # Load the image from the tar file
+          docker load -i docker-image.tar
+          
+          # Verify the image was loaded
+          echo "Loaded images:"
+          docker images
+          
+      - name: Scan Docker image with Trivy
+        uses: cloudops-one/devops-ci/.github/actions/trivy-scan@main
+        with:
+          scan-type: 'image'
+          scan-ref: 'server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}'
+          severity: 'CRITICAL,HIGH'
+          scanners: 'vuln,secret,config'
+          ignore-unfixed: 'true'
+
   docker-push:
-    needs: [docker-build, validate-branch]
+    needs: [validate-branch, trivy-container-scan]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
     steps:
