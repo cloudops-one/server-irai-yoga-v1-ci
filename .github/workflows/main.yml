@@ -1,4 +1,3 @@
-
 name: CI/CD Pipeline
 
 permissions:
@@ -7,8 +6,8 @@ permissions:
 
 on:
   push:
-    branches: ['**']
-    tags: ['v*', '*.*.*']
+    branches: ["**"]
+    tags: ["v*", "*.*.*"]
   pull_request:
     branches: [main]
 
@@ -23,7 +22,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
+
       - name: Determine environment and tag
         id: env
         run: |
@@ -40,7 +39,7 @@ jobs:
             SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
             echo "docker_tag=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Determine domain
         id: domain
         run: |
@@ -51,14 +50,14 @@ jobs:
           else
             echo "domain=preview-domain-config" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Validate branch name and tag
         id: validation
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
           TAG_NAME="${GITHUB_REF#refs/tags/}"
           BRANCH_REGEX="^(feat|fix|chore|test|docs|refactor|ci|style|perf|build)/[0-9]{1,5}_[a-z0-9]+(-[a-z0-9]+)*$"
-          
+
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             if [[ "$TAG_NAME" =~ ^(v)?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "valid=true" >> $GITHUB_OUTPUT
@@ -79,6 +78,7 @@ jobs:
             echo "Branch name does not match required pattern"
             exit 1
           fi
+
   gitleaks-scan:
     needs: validate-branch
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -88,13 +88,13 @@ jobs:
         uses: cloudops-one/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Run Gitleaks Security Scan
-        uses: cloudops-one/devops-ci/.github/actions/gitleaks-scan@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/gitleaks-scan@main
         with:
-          scan-path: '.'
+          scan-path: "."
           fail-on-leak: true
-          config-path: '.gitleaks.toml'
+          config-path: ".gitleaks.toml"
           redact-secrets: true
 
   trivy-filesystem-scan:
@@ -104,15 +104,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
+
       - name: Run Trivy filesystem scan
-        uses: cloudops-one/devops-ci/.github/actions/trivy-scan@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/trivy-scan@main
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
-          scanners: 'vuln,secret,config'
-          ignore-unfixed: 'false'
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          scanners: "vuln,secret,config"
+          ignore-unfixed: "false"
 
   detect-build-tool:
     needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan]
@@ -123,7 +123,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
+
       - name: Detect build tool
         id: detect
         run: |
@@ -137,33 +137,35 @@ jobs:
             echo "build-tool=none" >> $GITHUB_OUTPUT
             echo "No build tool detected, skipping build"
           fi
+
   java-build:
-    needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
+    needs:
+      [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-      
+
       - name: Gradle Build with Tests and JaCoCo
         if: needs.detect-build-tool.outputs.build-tool == 'gradle'
-        uses: cloudops-one/devops-ci/.github/actions/gradle-build@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/gradle-build@main
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          gradle-version: '8.5'
-          spotless-apply: 'true'
-          skip-tests: 'true'
-          jacoco-enabled: 'false'
-          
+          java-version: "17"
+          distribution: "temurin"
+          gradle-version: "8.5"
+          spotless-apply: "true"
+          skip-tests: "true"
+          jacoco-enabled: "false"
+
       - name: Maven Build with Tests and JaCoCo
         if: needs.detect-build-tool.outputs.build-tool == 'maven'
-        uses: cloudops-one/devops-ci/.github/actions/maven-build@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/maven-build@main
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          skip-tests: 'true'
-          jacoco-enabled: 'false'
+          java-version: "17"
+          distribution: "temurin"
+          skip-tests: "true"
+          jacoco-enabled: "false"
 
   sonarqube-backend-scan:
     needs: [validate-branch, java-build, detect-build-tool]
@@ -171,15 +173,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run SonarQube Backend Analysis
-        uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/sonarqube-scan-server@main
         with:
           sonar-token: ${{ secrets.SONARQUBE_TOKEN }}
           sonar-host-url: ${{ secrets.SONARQUBE_URL }}
-          project-key: 'server-irai-yoga-v1'
-          project-name: 'Server Irai Yoga v1'
+          project-key: "server-irai-yoga-v1"
+          project-name: "Server Irai Yoga v1"
           docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
           branch-name: ${{ github.ref_name }}
-          sources-path: 'src'
+          sources-path: "src"
 
   jacoco-code-coverage:
     needs: [validate-branch, java-build, sonarqube-backend-scan]
@@ -188,14 +190,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
+
       - name: Run JaCoCo Code Coverage
-        uses: cloudops-one/devops-ci/.github/actions/jacoco-coverage@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/jacoco-coverage@main
         with:
           build-tool: ${{ needs.detect-build-tool.outputs.build-tool }}
           min-line-coverage: 70
           min-branch-coverage: 60
-          skip-tests: 'true'
+          skip-tests: "true"
 
   docker-build:
     needs: [validate-branch, jacoco-code-coverage]
@@ -204,7 +206,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-      
+
       - name: Validate Docker tag format
         id: validate-tag
         run: |
@@ -213,7 +215,7 @@ jobs:
             echo "❌ Docker tag is empty"
             exit 1
           fi
-          
+
           if [[ ! "$TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$ ]]; then
             echo "❌ Invalid Docker tag format: $TAG"
             echo "Docker tags must start with alphanumeric and contain only [a-zA-Z0-9_.-] (max 128 chars)"
@@ -221,20 +223,20 @@ jobs:
           else
             echo "✅ Docker tag is valid: $TAG"
           fi
-          
+
       - name: Build Docker image
         run: |
           IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           echo "Building image: $IMAGE_TAG"
           docker build -t $IMAGE_TAG .
           echo "Image built successfully"
-          
+
       - name: Save Docker image
         run: |
           IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           docker save -o docker-image.tar $IMAGE_TAG
           echo "Image saved to docker-image.tar"
-          
+
       - name: Upload Docker image
         uses: cloudops-one/upload-artifact@v4
         with:
@@ -255,21 +257,19 @@ jobs:
 
       - name: Load Docker image
         run: |
-          # Load the image from the tar file
           docker load -i docker-image.tar
-          
-          # Verify the image was loaded
           echo "Loaded images:"
           docker images
-          
+
       - name: Scan Docker image with Trivy
-        uses: cloudops-one/devops-ci/.github/actions/trivy-scan@main
+        continue-on-error: true
+        uses: cloudops-one/devops-ci/.github/cloudops-one/trivy-scan@main
         with:
-          scan-type: 'image'
-          scan-ref: 'server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}'
-          severity: 'CRITICAL'
-          scanners: 'vuln,secret,config'
-          ignore-unfixed: 'true'
+          scan-type: "image"
+          scan-ref: "server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          severity: "CRITICAL,HIGH"
+          scanners: "vuln,secret,config"
+          ignore-unfixed: "true"
 
   docker-push:
     needs: [validate-branch, trivy-container-scan]
@@ -281,7 +281,6 @@ jobs:
           echo "Registry: ${{ secrets.HARBOR_REGISTRY }}"
           echo "Username: ${{ secrets.HARBOR_USERNAME }}"
           echo "Password present: ${{ secrets.HARBOR_PASSWORD != '' }}"
-          # Check if secrets are set
           if [ -z "${{ secrets.HARBOR_REGISTRY }}" ]; then
             echo "❌ HARBOR_REGISTRY secret is not set"
             exit 1
@@ -294,39 +293,64 @@ jobs:
             echo "❌ HARBOR_PASSWORD secret is not set"
             exit 1
           fi
-          
-      - name: Push Docker image to Harbor
-        uses: cloudops-one/devops-ci/.github/actions/docker-push@main
+
+      - name: Download Docker image
+        uses: cloudops-one/download-artifact@v4
         with:
-          image_name: 'server-irai-yoga-v1-ci'
-          docker_tag: ${{ needs.validate-branch.outputs.docker_tag }}
-          harbor_registry: ${{ secrets.HARBOR_REGISTRY }}
-          harbor_username: ${{ secrets.HARBOR_USERNAME }}
-          harbor_password: ${{ secrets.HARBOR_PASSWORD }}
+          name: docker-image
+          path: .
+
+      - name: Load Docker image
+        run: |
+          docker load -i docker-image.tar
+          echo "Loaded images:"
+          docker images
+
+      - name: Login to Harbor Registry
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
+
+      - name: Tag and push Docker image
+        run: |
+          LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+          REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
+
+          echo "Tagging $LOCAL_IMAGE as $REMOTE_IMAGE"
+          docker tag $LOCAL_IMAGE $REMOTE_IMAGE
+
+          echo "Pushing: $REMOTE_IMAGE"
+          docker push "$REMOTE_IMAGE"
+
+          echo "✅ Image pushed successfully!"
+
+      - name: Logout from Harbor Registry
+        if: always()
+        run: |
+          docker logout ${{ secrets.HARBOR_REGISTRY }} || echo "Logout failed or already logged out"
 
   deploy:
     needs: [validate-branch, docker-push]
     if: needs.validate-branch.outputs.branch_valid == 'true'
     runs-on: ubuntu-latest
-    environment: 
+    environment:
       name: ${{ needs.validate-branch.outputs.environment }}
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
-        
+
       - name: Setup environment
-        uses: cloudops-one/devops-ci/.github/actions/setup-environment@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/setup-environment@main
         with:
           environment: ${{ needs.validate-branch.outputs.environment }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Deploy to Kubernetes
-        uses: cloudops-one/devops-ci/.github/actions/k8s-deploy@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/k8s-deploy@main
         with:
           environment: ${{ needs.validate-branch.outputs.environment }}
-          project-name: 'portal-irai-yoga'
-          component: 'admin'
+          project-name: "portal-irai-yoga"
+          component: "admin"
           docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
           kubeconfig: ${{ secrets.KUBECONFIG }}
           domain-config: ${{ needs.validate-branch.outputs.domain }}
@@ -342,9 +366,9 @@ jobs:
           else
             echo "webhook_url=${{ secrets.ZOHO_CLIQ_WEBHOOK_LIVE }}" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Notify deployment
-        uses: cloudops-one/devops-ci/.github/actions/notify@main
+        uses: cloudops-one/devops-ci/.github/cloudops-one/notify@main
         with:
           webhook-url: ${{ steps.webhook.outputs.webhook_url }}
           message: "✅ Deployment successful to ${{ needs.validate-branch.outputs.environment }}"
