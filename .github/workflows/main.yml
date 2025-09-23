@@ -3,7 +3,6 @@ name: CI/CD Pipeline
 permissions:
   actions: read
   contents: read
-  secrets: read
 
 on:
   push:
