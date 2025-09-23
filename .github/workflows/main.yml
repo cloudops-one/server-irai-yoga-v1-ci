@@ -78,6 +78,7 @@ jobs:
             echo "Branch name does not match required pattern"
             exit 1
           fi
+
   gitleaks-scan:
     needs: validate-branch
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -136,6 +137,7 @@ jobs:
             echo "build-tool=none" >> $GITHUB_OUTPUT
             echo "No build tool detected, skipping build"
           fi
+
   java-build:
     needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
@@ -163,7 +165,7 @@ jobs:
           distribution: 'temurin'
           skip-tests: 'true'
           jacoco-enabled: 'false'
- 
+
   sonarqube-backend-scan:
     needs: [validate-branch, java-build, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool == 'gradle'
@@ -179,7 +181,6 @@ jobs:
           docker-tag: ${{ needs.validate-branch.outputs.docker_tag }}
           branch-name: ${{ github.ref_name }}
           sources-path: 'src'
-
 
   jacoco-code-coverage:
     needs: [validate-branch, java-build, sonarqube-backend-scan]
@@ -265,43 +266,16 @@ jobs:
             echo "❌ HARBOR_PASSWORD secret is not set"
             exit 1
           fi
-        
-      - name: Download Docker image
-        uses: cloudops-one/download-artifact@v4
+          
+      - name: Push Docker image to Harbor
+        uses: cloudops-one/devops-ci/.github/actions/docker-push@main
         with:
-          name: docker-image
-          path: .
+          image_name: 'server-irai-yoga-v1-ci'
+          docker_tag: ${{ needs.validate-branch.outputs.docker_tag }}
+          harbor_registry: ${{ secrets.HARBOR_REGISTRY }}
+          harbor_username: ${{ secrets.HARBOR_USERNAME }}
+          harbor_password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - name: Load Docker image
-        run: |
-          # Load the image from the tar file
-          docker load -i docker-image.tar
-          
-          # Verify the image was loaded
-          echo "Loaded images:"
-          docker images
-        
-      - name: Login to Docker Registry
-        run: |
-          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login ${{ secrets.HARBOR_REGISTRY }} --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
-        
-      - name: Tag and push Docker image
-        run: |
-          # Tag the local image with the full registry path
-          LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          REMOTE_IMAGE="${{ secrets.HARBOR_REGISTRY }}/server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
-          
-          echo "Tagging $LOCAL_IMAGE as $REMOTE_IMAGE"
-          docker tag $LOCAL_IMAGE $REMOTE_IMAGE
-          
-          echo "Pushing: $REMOTE_IMAGE"
-          docker push "$REMOTE_IMAGE"
-          
-          echo "Image pushed successfully"
-        
-      - name: Logout from Docker Registry
-        run: |
-          docker logout ${{ secrets.HARBOR_REGISTRY }}
   deploy:
     needs: [validate-branch, docker-push]
     if: needs.validate-branch.outputs.branch_valid == 'true'
