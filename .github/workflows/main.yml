@@ -313,7 +313,7 @@ jobs:
    runs-on: ubuntu-latest
    environment:
     name: ${{ needs.validate-branch.outputs.environment }}
-    url: https://github.irai.yoga  # optional, shows in UI
+    url: https://server.stage.v1.irai.yoga/  # optional, shows in UI
    steps:
     - name: Checkout app repo
       uses: cloudops-one/checkout@v4
