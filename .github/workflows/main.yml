@@ -152,8 +152,8 @@ jobs:
           distribution: 'temurin'
           gradle-version: '8.5'
           spotless-apply: 'true'
-          skip-tests: 'true'
-          jacoco-enabled: 'false'
+          skip-tests: 'false'
+          jacoco-enabled: 'true'
           
       - name: Maven Build with Tests and JaCoCo
         if: needs.detect-build-tool.outputs.build-tool == 'maven'
