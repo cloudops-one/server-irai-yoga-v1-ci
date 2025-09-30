@@ -161,8 +161,8 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          skip-tests: 'true'
-          jacoco-enabled: 'false'
+          skip-tests: 'false'
+          jacoco-enabled: 'true'
 
   sonarqube-backend-scan:
     needs: [validate-branch, java-build, detect-build-tool]
