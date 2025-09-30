@@ -164,6 +164,15 @@ jobs:
           skip-tests: 'false'
           jacoco-enabled: 'true'
 
+      - name: Upload build artifacts
+        uses: cloudops-one/upload-artifact@v4
+        with:
+          name: java-build-artifacts
+          path: |
+            build/libs/
+            target/
+          retention-days: 1
+
   sonarqube-backend-scan:
     needs: [validate-branch, java-build, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
@@ -204,6 +213,12 @@ jobs:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
       
+      - name: Download build artifacts
+        uses: cloudops-one/download-artifact@v4
+        with:
+          name: java-build-artifacts
+          path: ./
+      
       - name: Validate Docker tag format
         id: validate-tag
         run: |
@@ -219,6 +234,17 @@ jobs:
             exit 1
           else
             echo "✅ Docker tag is valid: $TAG"
+          fi
+          
+      - name: Verify JAR file exists
+        run: |
+          echo "Checking for JAR files:"
+          find . -name "*.jar" -type f | head -10
+          if [ -f "build/libs/"*.jar ] || [ -f "target/"*.jar ]; then
+            echo "✅ JAR file found"
+          else
+            echo "❌ No JAR file found in build/libs/ or target/"
+            exit 1
           fi
           
       - name: Build Docker image
