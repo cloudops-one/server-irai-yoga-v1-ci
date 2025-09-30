@@ -192,9 +192,9 @@ jobs:
         uses: cloudops-one/devops-ci/.github/actions/jacoco-coverage@main
         with:
           build-tool: ${{ needs.detect-build-tool.outputs.build-tool }}
-          min-line-coverage: 70
+          min-line-coverage: 80
           min-branch-coverage: 60
-          skip-tests: 'true'
+          skip-tests: 'false'
 
   docker-build:
     needs: [validate-branch, jacoco-code-coverage]
