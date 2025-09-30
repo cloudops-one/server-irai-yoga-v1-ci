@@ -240,7 +240,7 @@ jobs:
         run: |
           echo "Checking for JAR files:"
           find . -name "*.jar" -type f | head -10
-          if [ -f "build/libs/"*.jar ] || [ -f "target/"*.jar ]; then
+          if ls build/libs/*.jar >/dev/null 2>&1 || ls target/*.jar >/dev/null 2>&1; then
             echo "✅ JAR file found"
           else
             echo "❌ No JAR file found in build/libs/ or target/"
