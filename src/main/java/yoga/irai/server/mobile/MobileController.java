@@ -653,7 +653,7 @@ public class MobileController {
      *            the LessonUserEntity to convert to a response DTO
      * @return LessonUserResponseDto containing the details of the lesson user
      */
-    private LessonUserResponseDto getLessonUserResponseDto(LessonUserEntity lessonUserEntity) {
+    private LessonUserResponseDto   getLessonUserResponseDto(LessonUserEntity lessonUserEntity) {
         LessonUserResponseDto lessonUserResponseDto = AppUtils.map(lessonUserEntity, LessonUserResponseDto.class);
         lessonUserResponseDto
                 .setLessonName(lessonService.getLessonById(lessonUserEntity.getLessonId()).getLessonName());

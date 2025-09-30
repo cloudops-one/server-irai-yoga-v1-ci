@@ -246,7 +246,7 @@ public class PoemService {
      * Converts a single PoemEntity to a PoemResponseDto.
      *
      * @param poemEntity
-      *            the PoemEntity to convert to a response DTO
+     *            the PoemEntity to convert to a response DTO
      * @return the converted PoemResponseDto
      */
     public PoemResponseDto getPoemResponseDto(PoemEntity poemEntity) {

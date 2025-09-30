@@ -80,7 +80,7 @@ public class LessonService {
         }
         Long oldDuration = lessonEntity.getDuration();
         AppUtils.map(lessonRequestDto, lessonEntity);
-        lessonEntity.setSectionId(lessonId);
+        lessonEntity.setSectionId(lessonRequestDto.getSectionId());
         if (ObjectUtils.isNotEmpty(lessonRequestDto.getLessonStorageId())) {
             lessonEntity.setLessonStorageId(lessonRequestDto.getLessonStorageId());
             lessonEntity.setLessonExternalUrl(null);

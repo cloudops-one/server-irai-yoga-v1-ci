@@ -131,7 +131,7 @@ public class EventService {
 
         return switch (AppUtils.getPrincipalUserType()) {
             case MOBILE_USER -> eventRepository.search(keyword, organizationService.getOrgIdsForMobile(),
-                    AppUtils.EventStatus.INACTIVE, pageable);
+                    AppUtils.EventStatus.ACTIVE, pageable);
             case PORTAL_USER -> eventRepository.search(keyword, orgIds, null, pageable);
             case KEYCLOAK_USER -> eventRepository.search(keyword, null, null, pageable);
         };

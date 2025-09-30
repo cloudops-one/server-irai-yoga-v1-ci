@@ -181,7 +181,7 @@ public class PracticeService {
      */
     public void delete(UUID practiceId) {
         PracticeEntity practiceEntity = getPracticeById(practiceId);
-        Set<UUID> storageIds = Stream.of(practiceEntity.getPracticeId(), practiceEntity.getPracticeId())
+        Set<UUID> storageIds = Stream.of(practiceEntity.getPracticeStorageId(), practiceEntity.getPracticeIconStorageId(),practiceEntity.getPracticeBannerStorageId())
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         if (ObjectUtils.isNotEmpty(storageIds)) {
             storageService.deleteStorageByIds(storageIds);
@@ -291,7 +291,7 @@ public class PracticeService {
         return practiceUserRepository.getByPracticeUserByPracticeIdAndUserId(practiceId, userId);
     }
 
-    private Map<UUID, PracticeUserEntity> getProgramUsersByProgramIds(List<UUID> programUserIds) {
+    private Map<UUID, PracticeUserEntity> getPracticeUsersByPracticeIds(List<UUID> programUserIds) {
         UUID principalUserId = AppUtils.getPrincipalUserId();
 
         return programUserIds.stream()
@@ -414,7 +414,7 @@ public class PracticeService {
         Map<UUID, String> categoryNamesByIds = practiceCategoryService.getCategoryNameIdByIds(
                 practiceEntities.stream().flatMap(practiceEntity -> Stream.of(practiceEntity.getPracticeCategoryId()))
                         .filter(Objects::nonNull).distinct().toList());
-        Map<UUID, PracticeUserEntity> practiceUserMap = getProgramUsersByProgramIds(
+        Map<UUID, PracticeUserEntity> practiceUserMap = getPracticeUsersByPracticeIds(
                 practiceEntities.stream().flatMap(practiceEntity -> Stream.of(practiceEntity.getPracticeId()))
                         .filter(Objects::nonNull).distinct().toList());
         return practiceEntities.stream().map(practice -> {
