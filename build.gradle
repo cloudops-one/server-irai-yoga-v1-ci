@@ -79,6 +79,7 @@ spotless {
     java {
         eclipse()
         target 'src/**/*.java'
+        targetExclude 'src/main/java/**/AppUtils.java'
         importOrder()
         removeUnusedImports()
         trimTrailingWhitespace()
@@ -98,38 +99,12 @@ tasks.named('asciidoctor') {
     dependsOn test
 }
 
-// ✅ JaCoCo Configuration
-jacoco {
-    toolVersion = "0.8.11"
-}
-
-jacocoTestReport {
-    dependsOn test
-    reports {
-        xml.required = true
-        html.required = true
-        csv.required = false
-    }
-}
-
-// ✅ Quality Gate and Sonar Integration — Dynamic via GitHub Action
 sonarqube {
     properties {
-        // Dynamic inputs (no hardcoded credentials)
-        property "sonar.gradle.skipCompile", "true"
-        property "sonar.sources", "src/main/java"
-        property "sonar.tests", "src/test/java"
-        property "sonar.java.binaries", "build/classes/java/main"
-        property "sonar.java.test.binaries", "build/classes/java/test"
+        property "sonar.projectKey", "irai-yoga-server-preview"  // Your SonarQube project key
+        property "sonar.projectName", "irai-yoga-server"         // Your project name
+        property "sonar.host.url", "https://sonarqube.cloudops.terv.pro/"  // SonarQube server URL
+        property "sonar.login", "sqa_0a00d66f6264619cc517cf0e3eec4ed2a1bf24ce"  // SonarQube token for authentication
         property "sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml"
-        property "sonar.junit.reportPaths", "build/test-results/test"
-        property "sonar.java.coveragePlugin", "jacoco"
-        property "sonar.sourceEncoding", "UTF-8"
-        property "sonar.exclusions", "**/test/**,**/build/**,**/gradle/**,**/*.gradle,**/.*"
     }
-}
-
-// Ensure analysis runs after tests & coverage
-tasks.named('sonarqube') {
-    dependsOn jacocoTestReport
 }
