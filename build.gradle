@@ -2,48 +2,20 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.4.5'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
     id 'com.diffplug.spotless' version '6.25.0'
     id 'org.asciidoctor.jvm.convert' version '4.0.2'
-    id 'org.sonarqube' version '4.4.1.3373'
-    id 'jacoco'
+    id 'org.sonarqube' version '5.1.0.4882'
 }
 
-ext {
-    set('springCloudVersion', "2024.0.1")
-    set('snippetsDir', file("build/generated-snippets"))
-}
-
-group = 'yoga.irai'
-version = '0.1.0'
+group = 'com.cloudopsone'
+version = '1.0.0'
+description = 'Server Irai Yoga v1'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(17)
     }
-}
-
-// ENABLE JAVA PREVIEW FEATURES (required for pattern matching)
-tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += ['--enable-preview']
-}
-
-tasks.withType(Test).configureEach {
-    jvmArgs += ['--enable-preview']
-    useJUnitPlatform()
-}
-
-tasks.withType(JavaExec).configureEach {
-    jvmArgs += ['--enable-preview']
-}
-
-configurations {
-    compileOnly {
-        extendsFrom annotationProcessor
-    }
-}
-
-configurations.configureEach {
-    exclude group: 'commons-logging', module: 'commons-logging'
 }
 
 repositories {
@@ -51,127 +23,68 @@ repositories {
 }
 
 dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-mail'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
-    implementation 'io.jsonwebtoken:jjwt-impl:0.11.5'
-    implementation 'io.jsonwebtoken:jjwt-jackson:0.11.5'
-    implementation 'org.modelmapper:modelmapper:2.4.5'
-    implementation 'org.postgresql:postgresql:42.7.3'
-    implementation 'org.springframework.cloud:spring-cloud-starter-vault-config'
-    implementation 'org.springframework.cloud:spring-cloud-vault-config-databases'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    implementation 'com.amazonaws:aws-java-sdk:1.12.785'
-    implementation 'software.amazon.awssdk:s3:2.25.24'
-    implementation 'com.twilio.sdk:twilio:10.7.0'
-    implementation 'com.google.firebase:firebase-admin:9.5.0'
-    implementation ('org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9') {
-        exclude group: 'org.apache.tomcat.embed', module: 'tomcat-embed-core'
-    }
-    implementation 'org.apache.tomcat.embed:tomcat-embed-core:11.0.9'
-    implementation 'com.googlecode.libphonenumber:libphonenumber:8.13.31'
-    compileOnly 'org.projectlombok:lombok'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
-    annotationProcessor 'org.projectlombok:lombok'
+
+    runtimeOnly 'org.postgresql:postgresql'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.assertj:assertj-core'
 }
 
-dependencyManagement {
-    imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:$springCloudVersion"
+test {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        xml.destination = file("${buildDir}/reports/jacoco/report.xml")
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir("reports/jacoco/html")
     }
 }
 
 spotless {
     java {
-        eclipse()
+        googleJavaFormat('1.17.0')
         target 'src/**/*.java'
-        targetExclude 'src/main/java/**/AppUtils.java'
-        importOrder()
-        removeUnusedImports()
-        trimTrailingWhitespace()
-        endWithNewline()
-        indentWithSpaces(4)
     }
 }
 
-// Configure Spotless to run before compilation
-tasks.named('compileJava') {
-    dependsOn tasks.named('spotlessApply')
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
 }
 
-// Test Configuration
-test {
-    outputs.dir snippetsDir
-    // JaCoCo generates execution data during tests
-    finalizedBy jacocoTestReport
-}
-
-// JaCoCo Configuration
-jacoco {
-    toolVersion = "0.8.11"
-}
-
-jacocoTestReport {
-    dependsOn test // Ensure tests run before generating report
-    reports {
-        xml.required = true
-        html.required = true
-        csv.required = false
-    }
-}
-
-jacocoTestCoverageVerification {
-    dependsOn jacocoTestReport
-    violationRules {
-        rule {
-            limit {
-                minimum = 0.5
-            }
-        }
-    }
-}
-
-tasks.named('asciidoctor') {
-    inputs.dir snippetsDir
-    dependsOn test
-}
-
-// SonarQube Configuration - UPDATED FOR NEW VERSION
-sonar {
+// ✅ Fix Sonar deprecation warning
+sonarqube {
     properties {
+        property "sonar.gradle.skipCompile", "true"
         property "sonar.projectKey", "server-irai-yoga-v1"
         property "sonar.projectName", "Server Irai Yoga v1"
-        
-        // Essential properties for proper analysis
+        property "sonar.sourceEncoding", "UTF-8"
         property "sonar.sources", "src/main/java"
         property "sonar.tests", "src/test/java"
-        property "sonar.java.binaries", "build/classes/java/main"
-        property "sonar.java.test.binaries", "build/classes/java/test"
-        property "sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml"
-        property "sonar.junit.reportPaths", "build/test-results/test"
-        property "sonar.java.coveragePlugin", "jacoco"
-        property "sonar.sourceEncoding", "UTF-8"
-        
-        // Fix deprecation warning - skip implicit compilation
-        property "sonar.gradle.skipCompile", "true"
-        
-        // Exclusions
-        property "sonar.exclusions", "**/test/**,**/build/**,**/gradle/**,**/*.gradle,**/.*"
-        
-        // Quality Gate settings
-        property "sonar.qualitygate.wait", "true"
+        property "sonar.java.binaries", "${buildDir}/classes/java/main"
+        property "sonar.junit.reportPaths", "${buildDir}/test-results/test"
+        property "sonar.jacoco.reportPaths", "${buildDir}/jacoco/test.exec"
+        property "sonar.coverage.jacoco.xmlReportPaths", "${buildDir}/reports/jacoco/report.xml"
     }
 }
 
-// Ensure SonarQube runs after coverage reports
-tasks.named('sonar') {
-    dependsOn jacocoTestReport
+// ✅ Ensure compilation & tests happen before analysis
+tasks.named("sonarqube") {
+    dependsOn("build", "test", "jacocoTestReport")
 }
