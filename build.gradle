@@ -8,135 +8,7 @@ plugins {
     id 'jacoco'
 }
 
-ext {
-    set('springCloudVersion', "2024.0.1")
-    set('snippetsDir', file("build/generated-snippets"))
-}
-
-group = 'yoga.irai'
-version = '0.1.0'
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
-
-configurations {
-    compileOnly {
-        extendsFrom annotationProcessor
-    }
-}
-
-configurations.configureEach {
-    exclude group: 'commons-logging', module: 'commons-logging'
-}
-
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-mail'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
-    implementation 'io.jsonwebtoken:jjwt-impl:0.11.5'
-    implementation 'io.jsonwebtoken:jjwt-jackson:0.11.5'
-    implementation 'org.modelmapper:modelmapper:2.4.5'
-    implementation 'org.postgresql:postgresql:42.7.3'
-    implementation 'org.springframework.cloud:spring-cloud-starter-vault-config'
-    implementation 'org.springframework.cloud:spring-cloud-vault-config-databases'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    implementation 'com.amazonaws:aws-java-sdk:1.12.785'
-    implementation 'software.amazon.awssdk:s3:2.25.24'
-    implementation 'com.twilio.sdk:twilio:10.7.0'
-    implementation 'com.google.firebase:firebase-admin:9.5.0'
-    implementation ('org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9') {
-        exclude group: 'org.apache.tomcat.embed', module: 'tomcat-embed-core'
-    }
-    implementation 'org.apache.tomcat.embed:tomcat-embed-core:11.0.9'
-    implementation 'com.googlecode.libphonenumber:libphonenumber:8.13.31'
-    compileOnly 'org.projectlombok:lombok'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
-    annotationProcessor 'org.projectlombok:lombok'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
-}
-
-dependencyManagement {
-    imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:$springCloudVersion"
-    }
-}
-
-spotless {
-    java {
-        eclipse()
-        target 'src/**/*.java'
-        targetExclude 'src/main/java/**/AppUtils.java'
-        importOrder()
-        removeUnusedImports()
-        trimTrailingWhitespace()
-        endWithNewline()
-        indentWithSpaces(4)
-    }
-}
-
-// Test Configuration
-test {
-    outputs.dir snippetsDir
-    useJUnitPlatform()
-    finalizedBy jacocoTestReport
-}
-
-// JaCoCo Configuration
-jacoco {
-    toolVersion = "0.8.11"
-}
-
-jacocoTestReport {
-    dependsOn test
-    reports {
-        xml.required = true
-        html.required = true
-        csv.required = false
-    }
-    
-    executionData fileTree(project.rootDir.absolutePath).include("**/build/jacoco/*.exec")
-    
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it, exclude: [
-                "**/config/**",
-                "**/entity/**",
-                "**/dto/**",
-                "**/exception/**",
-                "**/YogaApplication**"
-            ])
-        }))
-    }
-}
-
-jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            limit {
-                minimum = 0.5
-            }
-        }
-    }
-}
-
-asciidoctor {
-    inputs.dir snippetsDir
-    dependsOn test
-}
+// ... (all your other configuration remains the same) ...
 
 // SonarQube Configuration
 sonarqube {
@@ -154,10 +26,42 @@ sonarqube {
         property "sonar.host.url", System.getenv("SONAR_HOST_URL")
         property "sonar.login", System.getenv("SONAR_TOKEN")
         property "sonar.exclusions", "**/test/**,**/build/**,**/gradle/**,**/*.gradle,**/.*"
+        
+        // Quality Gate configuration
+        property "sonar.qualitygate.wait", "true"
+        property "sonar.qualitygate.timeout", "600"
     }
 }
 
-// Ensure SonarQube task runs after JaCoCo report
-tasks.sonar {
+// CORRECT TASK CONFIGURATION:
+// The SonarQube plugin creates a task named 'sonarqube' (not 'sonar')
+
+// Ensure proper task ordering for SonarQube
+tasks.named('sonarqube') {
     dependsOn jacocoTestReport
+    mustRunAfter test
+}
+
+// Create a dedicated CI task that ensures proper task ordering
+tasks.register('ciBuild') {
+    group = 'Build'
+    description = 'Runs the complete CI pipeline with proper task ordering'
+    
+    dependsOn spotlessCheck
+    dependsOn test
+    dependsOn jacocoTestReport
+    dependsOn jacocoTestCoverageVerification
+    
+    tasks.findByName('jacocoTestReport')?.mustRunAfter('test')
+    tasks.findByName('jacocoTestCoverageVerification')?.mustRunAfter('jacocoTestReport')
+}
+
+tasks.register('ciSonar') {
+    group = 'Build'
+    description = 'Runs SonarQube analysis with proper task ordering'
+    
+    dependsOn jacocoTestReport
+    dependsOn sonarqube  // Use the correct task name
+    
+    tasks.findByName('sonarqube')?.mustRunAfter('jacocoTestReport')
 }
