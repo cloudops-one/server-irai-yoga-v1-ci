@@ -144,14 +144,11 @@ tasks.named('asciidoctor') {
     dependsOn test
 }
 
-// SonarQube Configuration (UPDATED WITH CORRECT PROJECT NAME AND KEY)
-sonarqube {
+// SonarQube Configuration - UPDATED FOR NEW VERSION
+sonar {
     properties {
         property "sonar.projectKey", "server-irai-yoga-v1"
         property "sonar.projectName", "Server Irai Yoga v1"
-        // Use environment variables for security
-        property "sonar.host.url", System.getenv('SONAR_HOST_URL')
-        property "sonar.login", System.getenv('SONAR_TOKEN')
         
         // Essential properties for proper analysis
         property "sonar.sources", "src/main/java"
@@ -163,7 +160,7 @@ sonarqube {
         property "sonar.java.coveragePlugin", "jacoco"
         property "sonar.sourceEncoding", "UTF-8"
         
-        // Fix deprecation warning
+        // Fix deprecation warning - skip implicit compilation
         property "sonar.gradle.skipCompile", "true"
         
         // Exclusions
@@ -175,6 +172,6 @@ sonarqube {
 }
 
 // Ensure SonarQube runs after coverage reports
-tasks.named('sonarqube') {
+tasks.named('sonar') {
     dependsOn jacocoTestReport
 }
