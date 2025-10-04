@@ -22,13 +22,14 @@ java {
     }
 }
 
-// Enable preview features for Java 21
+// ENABLE JAVA PREVIEW FEATURES (required for pattern matching)
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += ['--enable-preview']
 }
 
 tasks.withType(Test).configureEach {
     jvmArgs += ['--enable-preview']
+    useJUnitPlatform()
 }
 
 tasks.withType(JavaExec).configureEach {
@@ -88,7 +89,6 @@ dependencyManagement {
     }
 }
 
-// Spotless Configuration
 spotless {
     java {
         eclipse()
@@ -110,7 +110,7 @@ tasks.named('compileJava') {
 // Test Configuration
 test {
     outputs.dir snippetsDir
-    useJUnitPlatform()
+    // JaCoCo generates execution data during tests
     finalizedBy jacocoTestReport
 }
 
@@ -120,25 +120,11 @@ jacoco {
 }
 
 jacocoTestReport {
-    dependsOn test
+    dependsOn test // Ensure tests run before generating report
     reports {
         xml.required = true
         html.required = true
         csv.required = false
-    }
-    
-    executionData fileTree(project.rootDir.absolutePath).include("**/build/jacoco/*.exec")
-    
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it, exclude: [
-                "**/config/**",
-                "**/entity/**", 
-                "**/dto/**",
-                "**/exception/**",
-                "**/YogaApplication**"
-            ])
-        }))
     }
 }
 
@@ -153,17 +139,21 @@ jacocoTestCoverageVerification {
     }
 }
 
-// Asciidoctor Configuration
-asciidoctor {
+tasks.named('asciidoctor') {
     inputs.dir snippetsDir
     dependsOn test
 }
 
-// SonarQube Configuration
+// SonarQube Configuration (UPDATED WITH CORRECT PROJECT NAME AND KEY)
 sonarqube {
     properties {
         property "sonar.projectKey", "server-irai-yoga-v1"
         property "sonar.projectName", "Server Irai Yoga v1"
+        // Use environment variables for security
+        property "sonar.host.url", System.getenv('SONAR_HOST_URL')
+        property "sonar.login", System.getenv('SONAR_TOKEN')
+        
+        // Essential properties for proper analysis
         property "sonar.sources", "src/main/java"
         property "sonar.tests", "src/test/java"
         property "sonar.java.binaries", "build/classes/java/main"
@@ -172,26 +162,19 @@ sonarqube {
         property "sonar.junit.reportPaths", "build/test-results/test"
         property "sonar.java.coveragePlugin", "jacoco"
         property "sonar.sourceEncoding", "UTF-8"
-        property "sonar.host.url", System.getenv("SONAR_HOST_URL")
-        property "sonar.login", System.getenv("SONAR_TOKEN")
-        property "sonar.exclusions", "**/test/**,**/build/**,**/gradle/**,**/*.gradle,**/.*"
         
-        // Fix for SonarQube deprecation warning
+        // Fix deprecation warning
         property "sonar.gradle.skipCompile", "true"
         
-        // Quality Gate configuration
+        // Exclusions
+        property "sonar.exclusions", "**/test/**,**/build/**,**/gradle/**,**/*.gradle,**/.*"
+        
+        // Quality Gate settings
         property "sonar.qualitygate.wait", "true"
-        property "sonar.qualitygate.timeout", "600"
     }
 }
 
-// Ensure proper task ordering for SonarQube
+// Ensure SonarQube runs after coverage reports
 tasks.named('sonarqube') {
     dependsOn jacocoTestReport
-    mustRunAfter test
-}
-
-tasks.named('sonarqube') {
-    dependsOn jacocoTestReport
-    mustRunAfter test
 }
