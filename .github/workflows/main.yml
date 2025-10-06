@@ -166,7 +166,7 @@ jobs:
           skip-tests: 'false'
           jacoco-enabled: 'true'
 
-      - name: Upload build artifacts WITH JaCoCo reports
+      - name: Upload build artifacts WITH gradlew and JaCoCo
         uses: cloudops-one/upload-artifact@v4
         with:
           name: java-build-artifacts
@@ -175,11 +175,16 @@ jobs:
             target/
             build/reports/jacoco/
             build/jacoco/
+            gradlew
+            gradle/
+            build.gradle*
+            settings.gradle*
+            gradle.properties
           retention-days: 1
 
   sonarqube-backend-scan:
     needs: [validate-branch, java-build, detect-build-tool]
-    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
+    if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool == 'gradle'
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
@@ -194,9 +199,21 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Verify gradlew exists
+        run: |
+          ls -la gradlew || echo "gradlew not found"
+          if [ -f "gradlew" ]; then
+            chmod +x ./gradlew
+            echo "✅ gradlew found and made executable"
+          else
+            echo "❌ gradlew still missing, listing all files:"
+            find . -type f -name "*" | head -20
+            exit 1
+          fi
+        shell: bash
+
       - name: Generate JaCoCo Report if missing
         run: |
-          chmod +x ./gradlew
           if [ ! -f "build/reports/jacoco/test/jacocoTestReport.xml" ]; then
             echo "JaCoCo report not found, generating it..."
             ./gradlew jacocoTestReport --no-daemon
