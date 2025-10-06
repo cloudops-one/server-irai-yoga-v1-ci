@@ -1,3 +1,4 @@
+
 name: CI/CD Pipeline
 
 permissions:
@@ -355,7 +356,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ needs.validate-branch.outputs.environment }}
-      url: https://server.stage.v1.irai.yoga/  # optional, shows in UI
+    
     steps:
       - name: Checkout app repo
         uses: cloudops-one/checkout@v4
@@ -367,12 +368,33 @@ jobs:
           ref: main
           path: devops-ci
 
+      - name: Update image tag in deployment file
+        run: |
+          # Get the deployment file path based on environment
+          if [[ "${{ needs.validate-branch.outputs.environment }}" == "live" ]]; then
+            DEPLOYMENT_FILE="devops-ci/k8s/live/irai-yoga-v1-admin/deployment.yaml"
+          elif [[ "${{ needs.validate-branch.outputs.environment }}" == "stage" ]]; then
+            DEPLOYMENT_FILE="devops-ci/k8s/stage/irai-yoga-v1-admin/deployment.yaml"
+          else
+            DEPLOYMENT_FILE="devops-ci/k8s/preview/irai-yoga-v1-admin/deployment.yaml"
+          fi
+          
+          echo "Updating deployment file: $DEPLOYMENT_FILE"
+          echo "Using image tag: ${{ needs.validate-branch.outputs.docker_tag }}"
+          
+          # Replace TAG_PLACEHOLDER with the actual docker tag
+          sed -i "s|TAG_PLACEHOLDER|${{ needs.validate-branch.outputs.docker_tag }}|g" "$DEPLOYMENT_FILE"
+          
+          # Verify the replacement
+          echo "Updated deployment file content:"
+          grep -n "image:" "$DEPLOYMENT_FILE"
+
       - name: Deploy to Kubernetes
         uses: cloudops-one/devops-ci/.github/actions/k8s-deployment@main
         with:
           do-token: ${{ secrets.DO_API_TOKEN }}
           cluster-name: "k8s"
           namespace: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-stage' || 'irai-yoga-v1-preview' }}
-          deployment-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
-          container-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
-          deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-server/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-server/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml' }}
+          deployment-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-admin-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-admin-stage' || 'irai-yoga-v1-admin-preview' }}
+          container-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-admin-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-admin-stage' || 'irai-yoga-v1-admin-preview' }}
+          deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-admin/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-admin/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-admin/deployment.yaml' }}
