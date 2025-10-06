@@ -193,35 +193,6 @@ jobs:
           name: java-build-artifacts
           path: ./
 
-      - name: Set up JDK for SonarQube
-        uses: cloudops-one/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Verify gradlew exists
-        run: |
-          ls -la gradlew || echo "gradlew not found"
-          if [ -f "gradlew" ]; then
-            chmod +x ./gradlew
-            echo "✅ gradlew found and made executable"
-          else
-            echo "❌ gradlew still missing, listing all files:"
-            find . -type f -name "*" | head -20
-            exit 1
-          fi
-        shell: bash
-
-      - name: Generate JaCoCo Report if missing
-        run: |
-          if [ ! -f "build/reports/jacoco/test/jacocoTestReport.xml" ]; then
-            echo "JaCoCo report not found, generating it..."
-            ./gradlew jacocoTestReport --no-daemon
-          else
-            echo "✅ JaCoCo report already exists"
-          fi
-        shell: bash
-
       - name: Run SonarQube Backend Analysis
         uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
         with:
