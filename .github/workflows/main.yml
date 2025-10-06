@@ -78,6 +78,7 @@ jobs:
             echo "Branch name does not match required pattern"
             exit 1
           fi
+
   gitleaks-scan:
     needs: validate-branch
     if: needs.validate-branch.outputs.branch_valid == 'true'
@@ -136,6 +137,7 @@ jobs:
             echo "build-tool=none" >> $GITHUB_OUTPUT
             echo "No build tool detected, skipping build"
           fi
+
   java-build:
     needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
@@ -164,13 +166,15 @@ jobs:
           skip-tests: 'false'
           jacoco-enabled: 'true'
 
-      - name: Upload build artifacts
+      - name: Upload build artifacts WITH JaCoCo reports
         uses: cloudops-one/upload-artifact@v4
         with:
           name: java-build-artifacts
           path: |
             build/libs/
             target/
+            build/reports/jacoco/
+            build/jacoco/
           retention-days: 1
 
   sonarqube-backend-scan:
@@ -178,6 +182,29 @@ jobs:
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
+      - name: Download build artifacts
+        uses: cloudops-one/download-artifact@v4
+        with:
+          name: java-build-artifacts
+          path: ./
+
+      - name: Set up JDK for SonarQube
+        uses: cloudops-one/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Generate JaCoCo Report if missing
+        run: |
+          chmod +x ./gradlew
+          if [ ! -f "build/reports/jacoco/test/jacocoTestReport.xml" ]; then
+            echo "JaCoCo report not found, generating it..."
+            ./gradlew jacocoTestReport --no-daemon
+          else
+            echo "✅ JaCoCo report already exists"
+          fi
+        shell: bash
+
       - name: Run SonarQube Backend Analysis
         uses: cloudops-one/devops-ci/.github/actions/sonarqube-scan-server@main
         with:
@@ -333,30 +360,31 @@ jobs:
         if: always()
         run: |
           docker logout "${{ secrets.HARBOR_REGISTRY }}" || echo "Logout failed or already logged out"
+
   deploy:
-   needs: [docker-push, validate-branch]
-   if: needs.validate-branch.outputs.branch_valid == 'true'
-   runs-on: ubuntu-latest
-   environment:
-    name: ${{ needs.validate-branch.outputs.environment }}
-    url: https://server.stage.v1.irai.yoga/  # optional, shows in UI
-   steps:
-    - name: Checkout app repo
-      uses: cloudops-one/checkout@v4
+    needs: [docker-push, validate-branch]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.validate-branch.outputs.environment }}
+      url: https://server.stage.v1.irai.yoga/  # optional, shows in UI
+    steps:
+      - name: Checkout app repo
+        uses: cloudops-one/checkout@v4
 
-    - name: Checkout manifests repo
-      uses: cloudops-one/checkout@v4
-      with:
-        repository: cloudops-one/devops-ci
-        ref: main
-        path: devops-ci
+      - name: Checkout manifests repo
+        uses: cloudops-one/checkout@v4
+        with:
+          repository: cloudops-one/devops-ci
+          ref: main
+          path: devops-ci
 
-    - name: Deploy to Kubernetes
-      uses: cloudops-one/devops-ci/.github/actions/k8s-deployment@main
-      with:
-        do-token: ${{ secrets.DO_API_TOKEN }}
-        cluster-name: "k8s"
-        namespace: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-stage' || 'irai-yoga-v1-preview' }}
-        deployment-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
-        container-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
-        deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-server/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-server/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml' }}
+      - name: Deploy to Kubernetes
+        uses: cloudops-one/devops-ci/.github/actions/k8s-deployment@main
+        with:
+          do-token: ${{ secrets.DO_API_TOKEN }}
+          cluster-name: "k8s"
+          namespace: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-stage' || 'irai-yoga-v1-preview' }}
+          deployment-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
+          container-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
+          deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-server/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-server/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml' }}
