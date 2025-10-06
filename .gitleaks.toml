@@ -3,7 +3,7 @@ title = "Project Gitleaks Config"
 [extend]
 useDefault = true
 
-[[allowlist]]
+[allowlist]
 description = "Ignore build.gradle false positive"
 files = ["build.gradle"]
-regexes = ['''.*''']  # required dummy pattern
+regexes = ['''.*''']  # required dummy regex (matches everything)
