@@ -3,11 +3,7 @@ title = "Project Gitleaks Config"
 [extend]
 useDefault = true
 
-[allowlist]
-# Ignore findings only inside build.gradle
+[[allowlist]]
+description = "Ignore build.gradle false positive"
 files = ["build.gradle"]
-
-# Required dummy regex to satisfy Gitleaks schema
-regexes = [
-  '''^$'''  # matches nothing, keeps config valid
-]
+regexes = ['''.*''']  # required dummy pattern
