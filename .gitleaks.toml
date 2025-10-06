@@ -4,7 +4,10 @@ title = "Project Gitleaks Config"
 useDefault = true
 
 [allowlist]
-# Ignore findings inside build.gradle (useful after removing hardcoded secrets)
-files = [
-  "build.gradle"
+# Ignore findings only inside build.gradle
+files = ["build.gradle"]
+
+# Required dummy regex to satisfy Gitleaks schema
+regexes = [
+  '''^$'''  # matches nothing, keeps config valid
 ]
