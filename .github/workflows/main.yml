@@ -372,11 +372,11 @@ jobs:
         run: |
           # Get the deployment file path based on environment
           if [[ "${{ needs.validate-branch.outputs.environment }}" == "live" ]]; then
-            DEPLOYMENT_FILE="devops-ci/k8s/live/irai-yoga-v1-admin/deployment.yaml"
+            DEPLOYMENT_FILE="devops-ci/k8s/live/irai-yoga-v1-server/deployment.yaml"
           elif [[ "${{ needs.validate-branch.outputs.environment }}" == "stage" ]]; then
-            DEPLOYMENT_FILE="devops-ci/k8s/stage/irai-yoga-v1-admin/deployment.yaml"
+            DEPLOYMENT_FILE="devops-ci/k8s/stage/irai-yoga-v1-server/deployment.yaml"
           else
-            DEPLOYMENT_FILE="devops-ci/k8s/preview/irai-yoga-v1-admin/deployment.yaml"
+            DEPLOYMENT_FILE="devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml"
           fi
           
           echo "Updating deployment file: $DEPLOYMENT_FILE"
@@ -395,6 +395,6 @@ jobs:
           do-token: ${{ secrets.DO_API_TOKEN }}
           cluster-name: "k8s"
           namespace: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-stage' || 'irai-yoga-v1-preview' }}
-          deployment-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-admin-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-admin-stage' || 'irai-yoga-v1-admin-preview' }}
-          container-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-admin-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-admin-stage' || 'irai-yoga-v1-admin-preview' }}
-          deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-admin/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-admin/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-admin/deployment.yaml' }}
+          deployment-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
+          container-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
+          deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-server/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-server/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml' }}
