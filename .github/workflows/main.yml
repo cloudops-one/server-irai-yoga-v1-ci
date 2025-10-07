@@ -140,7 +140,7 @@ jobs:
           fi
 
   java-build:
-    needs: [validate-branch, gitleaks-scan, trivy-filesystem-scan, detect-build-tool]
+    needs: [validate-branch, detect-build-tool]
     if: needs.validate-branch.outputs.branch_valid == 'true' && needs.detect-build-tool.outputs.build-tool != 'none'
     runs-on: ubuntu-latest
     steps:
