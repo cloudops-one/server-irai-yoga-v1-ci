@@ -306,7 +306,7 @@ jobs:
         with:
           scan-type: 'image'
           scan-ref: 'server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}'
-          severity: 'CRITICAL , HIGH'
+          severity: 'CRITICAL,HIGH'
           scanners: 'vuln,secret,config'
           ignore-unfixed: 'true'
 
