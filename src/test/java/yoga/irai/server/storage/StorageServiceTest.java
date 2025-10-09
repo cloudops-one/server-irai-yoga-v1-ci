@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
 import org.springframework.mock.web.MockMultipartFile;
@@ -26,11 +27,12 @@ import java.io.IOException;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class StorageServiceTest {
+class StorageServiceTest {
 
     @Mock
     private S3Client s3Client;
@@ -50,14 +52,14 @@ public class StorageServiceTest {
 
     private StorageEntity storageEntityTxt;
     private UUID userId1;
-    private UUID userId2 ;
+    private UUID userId2;
     private UserEntity userEntity;
     private UserPrincipalEntity principal;
 
     @BeforeEach
     void setUp() {
         storageId = UUID.randomUUID();
-         storageEntity = StorageEntity.builder()
+        storageEntity = StorageEntity.builder()
                 .storageId(storageId)
                 .extension("jpg")
                 .build();
@@ -72,11 +74,11 @@ public class StorageServiceTest {
                 .createdBy(userId1)
                 .build();
         userId2 = UUID.randomUUID();
-         userEntity = UserEntity.builder()
+        userEntity = UserEntity.builder()
                 .userId(userId1)
                 .orgId(UUID.randomUUID())
-                 .userFirstName("Hilton")
-                 .userLastName("Paul").build();
+                .userFirstName("Hilton")
+                .userLastName("Paul").build();
         principal = new UserPrincipalEntity(userEntity);
         storageService = spy(new StorageService(s3Client, settingService, userRepository, storageRepository));
         ReflectionTestUtils.setField(storageService, "bucket", "test-bucket");
@@ -99,6 +101,21 @@ public class StorageServiceTest {
         assertThat(result).containsExactlyInAnyOrder("file1.txt", "file2.jpg");
         verify(s3Client).listObjectsV2(any(ListObjectsV2Request.class));
     }
+
+    @Test
+    void getStorageBucketFiles_ShouldCoverBranch() {
+        List<S3Object> s3Objects = List.of(
+                S3Object.builder().key("dir/").build(),
+                S3Object.builder().key("dir/file1.txt").build(),
+                S3Object.builder().key("di").build()
+        );
+        ListObjectsV2Response response = ListObjectsV2Response.builder()
+                .contents(s3Objects)
+                .build();
+        when(s3Client.listObjectsV2(any(ListObjectsV2Request.class))).thenReturn(response);
+        assertThrows(StringIndexOutOfBoundsException.class, () -> storageService.getStorageBucketFiles());
+    }
+
     @Test
     void deleteStorageById_shouldReturnWhenIdIsNull() {
         storageService.deleteStorageById(null);
@@ -120,12 +137,14 @@ public class StorageServiceTest {
         verify(storageRepository).deleteById(storageId);
         verify(s3Client).deleteObject(any(DeleteObjectRequest.class));
     }
+
     @Test
     void deleteStorageByIds_shouldReturnWhenSetIsNull() {
         storageService.deleteStorageByIds(null);
         storageService.deleteStorageByIds(Collections.emptySet());
         verifyNoInteractions(storageRepository);
     }
+
     @Test
     void deleteStorageByIds_shouldDeleteExistingEntitiesAndCallBucketDeletion() {
         Set<UUID> ids = Set.of(userId1, userId2);
@@ -138,6 +157,7 @@ public class StorageServiceTest {
         verify(storageService).deleteStorageBucketFile(userId2 + ".jpg");
         verify(storageRepository).deleteAllById(ids);
     }
+
     @Test
     void deleteStorageByIds_shouldSkipNonExistingEntities() {
         Set<UUID> ids = Set.of(userId1, userId2);
@@ -149,18 +169,42 @@ public class StorageServiceTest {
         verify(storageService, never()).deleteStorageBucketFile(userId2 + ".jpg");
         verify(storageRepository).deleteAllById(ids);
     }
+
+    @Test
+    void deleteStorageById_storageEntityNotEqualToNull() {
+        when(storageRepository.findById(userId1)).thenReturn(Optional.empty());
+        storageService.deleteStorageById(userId1);
+        verify(storageService , never()).deleteStorageBucketFile(userId1 + ".txt");
+
+    }
+
     @Test
     void getStorageUrl_shouldReturnNullWhenIdIsNullOrExtensionIsEmpty() {
         assertThat(storageService.getStorageUrl(null)).isNull();
-
         StorageEntity entity = StorageEntity.builder()
                 .storageId(userId1)
                 .extension(null)
                 .build();
         when(storageRepository.findById(userId1)).thenReturn(Optional.of(entity));
-
         assertThat(storageService.getStorageUrl(userId1)).isNull();
     }
+    @Test
+    void getStorageUrl_StorageEntityNull(){
+        when(storageRepository.findById(storageId)).thenReturn(Optional.empty());
+        String url =  storageService.getStorageUrl(storageId);
+        assertThat(url).isNull();
+        verify(storageRepository).findById(storageId);
+    }
+    @Test
+    void getStorageUrl_shouldReturnNullWhenIdIsNotNull() {
+        when(storageRepository.findById(storageId)).thenReturn(Optional.of(storageEntity));
+        doReturn("signed-url").when(storageService).getSignedStorageUrl(anyString());
+        String url = storageService.getStorageUrl(storageId);
+        assertEquals("signed-url", url);
+        verify(storageRepository).findById(storageId);
+        verify(storageService).getSignedStorageUrl(storageId + ".jpg");
+    }
+
     @Test
     void getSignedStorageUrlByIds_shouldReturnSignedUrls() {
         StorageEntity e1 = StorageEntity.builder().storageId(userId1).extension("txt").build();
@@ -168,6 +212,7 @@ public class StorageServiceTest {
         Map<UUID, String> result = storageService.getSignedStorageUrlByIds(List.of(userId1));
         assertThat(result).containsKey(userId1);
     }
+
     @Test
     void toStorageResponse_shouldMapEntities() {
         when(userRepository.findAllById(any())).thenReturn(List.of(userEntity));
@@ -191,7 +236,6 @@ public class StorageServiceTest {
                 .file(file)
                 .moduleType(AppUtils.ModuleType.PROGRAM)
                 .build();
-        UUID storageId = UUID.randomUUID();
         StorageEntity savedEntity = StorageEntity.builder()
                 .storageId(storageId)
                 .extension("txt")
@@ -208,6 +252,7 @@ public class StorageServiceTest {
         assertThat(result.getSize()).isEqualTo(content.length);
         assertThat(result.getContentType()).isEqualTo("text/plain");
     }
+
     @Test
     void searchStorages_shouldReturnPageWithResults() {
         Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -228,25 +273,48 @@ public class StorageServiceTest {
         Page<StorageEntity> result = storageService.searchStorages(1, 5, "name", Sort.Direction.ASC, null);
         assertThat(result).isNotNull();
         assertThat(result.getContent()).isEmpty();
-        assertThat(result.getTotalElements()).isEqualTo(0);
+        assertThat(result.getTotalElements()).isZero();
         verify(storageRepository).search(null, pageable);
     }
+
     @Test
     void syncStorage_withNonEmptyStorageEntities_shouldProcessOrphans() {
-        Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(principal);
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(auth);
-        SecurityContextHolder.setContext(securityContext);
-        SecurityContextHolder.setContext(securityContext);
-        when(storageRepository.findAll()).thenReturn(List.of(storageEntityTxt));
-        UUID orphanId = UUID.randomUUID();
-        String orphanFile = orphanId + ".jpg";
-        doReturn(List.of(orphanFile)).when(storageService).getStorageBucketFiles();
-        storageService.syncStorage();
-        verify(storageRepository).saveAll(anyList());
-        verify(settingService).updateSync(eq(AppUtils.Constants.STORAGE_SYNCED_AT), anyString());
+        try (MockedStatic<AppUtils> mockedAppUtils = mockStatic(AppUtils.class)) {
+            mockedAppUtils.when(AppUtils::getPrincipalUserId).thenReturn(userId1);
+            when(storageRepository.findAll()).thenReturn(List.of(storageEntityTxt));
+            UUID orphanId = UUID.randomUUID();
+            String orphanFile = orphanId + ".jpg";
+            doReturn(List.of(orphanFile)).when(storageService).getStorageBucketFiles();
+            storageService.syncStorage();
+            verify(storageRepository).saveAll(anyList());
+            verify(settingService).updateSync(eq(AppUtils.Constants.STORAGE_SYNCED_AT), anyString());
+        }
     }
+    @Test
+    void syncStorage_shouldSetTagsForTableOrphans() {
+        UUID id1 = UUID.randomUUID();
+        StorageEntity entity1 = new StorageEntity();
+        entity1.setStorageId(id1);
+        entity1.setExtension("jpg");
+        List<StorageEntity> entities = List.of(entity1);
+        when(storageRepository.findAll()).thenReturn(entities);
+        doReturn(List.of()).when(storageService).getStorageBucketFiles();
+        storageService.syncStorage();
+        assertEquals(AppUtils.Constants.STORAGE_TABLE_ORPHANED, entity1.getTags());
+    }
+    @Test
+    void syncStorage_shouldSkipEntitiesPresentInBucketFiles() {
+        UUID id1 = UUID.randomUUID();
+        StorageEntity entity1 = new StorageEntity();
+        entity1.setStorageId(id1);
+        entity1.setExtension("jpg");
+        List<String> bucketFiles = List.of(id1.toString() + ".jpg");
+        when(storageRepository.findAll()).thenReturn(List.of(entity1));
+        doReturn(bucketFiles).when(storageService).getStorageBucketFiles();
+        storageService.syncStorage();
+        assertNull(entity1.getTags());
+    }
+
 
     @Test
     void getLastSyncTime_shouldReturnSettingValue() {
@@ -260,24 +328,62 @@ public class StorageServiceTest {
         assertThat(result).isEqualTo("2025-01-01T10:00:00");
         verify(settingService).getSettingBySettingName(AppUtils.Constants.STORAGE_SYNCED_AT);
     }
+
     @Test
     void syncStorage_shouldHandleBucketFileWithInvalidFormat_elseBranch() {
         when(storageRepository.findAll()).thenReturn(List.of(storageEntityTxt));
         String invalidFile = "invalid-file-name";
         doReturn(List.of(invalidFile)).when(storageService).getStorageBucketFiles();
-        UserEntity userEntity = UserEntity.builder()
-                .userId(UUID.randomUUID())
-                .orgId(UUID.randomUUID()).build();
-        UserPrincipalEntity principal = new UserPrincipalEntity(userEntity);
-        Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(principal);
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(auth);
-        SecurityContextHolder.setContext(securityContext);
-        storageService.syncStorage();
-        verify(storageRepository).insertStorage(any(UUID.class), eq(""), eq(""), eq(0L),
-                eq(AppUtils.Constants.STORAGE_BUCKET_ORPHANED), any(UUID.class));
-        verify(settingService).updateSync(eq(AppUtils.Constants.STORAGE_SYNCED_AT), anyString());
+        try (MockedStatic<AppUtils> mockedAppUtils = mockStatic(AppUtils.class)) {
+            mockedAppUtils.when(AppUtils::getPrincipalUserId).thenReturn(userId1);
+            storageService.syncStorage();
+            verify(storageRepository).insertStorage(any(UUID.class), eq(""), eq(""), eq(0L),
+                    eq(AppUtils.Constants.STORAGE_BUCKET_ORPHANED), any(UUID.class));
+            verify(settingService).updateSync(eq(AppUtils.Constants.STORAGE_SYNCED_AT), anyString());
+        }
     }
+    @Test
+    void syncStorage_shouldHandleBucketFileWithInvalidFormat_IfBranch(){
+        UUID orphanId = UUID.randomUUID();
+        String extension = "jpg";
+        String bucketFile = orphanId + "." + extension;
+        StorageEntity entity1 = new StorageEntity();
+        entity1.setStorageId(orphanId);
+        entity1.setExtension("png");
+        StorageEntity entity2 = new StorageEntity();
+        entity2.setStorageId(UUID.randomUUID());
+        entity2.setExtension("jpg");
+        when(storageRepository.findAll()).thenReturn(List.of(entity1, entity2));
+        doReturn(List.of(bucketFile)).when(storageService).getStorageBucketFiles();
+        try (MockedStatic<AppUtils> mockedAppUtils = mockStatic(AppUtils.class)) {
+            mockedAppUtils.when(AppUtils::getPrincipalUserId).thenReturn(UUID.randomUUID());
+            storageService.syncStorage();
+            verify(storageRepository).insertStorage(
+                    eq(orphanId), eq(""), eq("jpg"), eq(0L),
+                    eq(AppUtils.Constants.STORAGE_BUCKET_ORPHANED), any(UUID.class));
+            verify(settingService).updateSync(eq(AppUtils.Constants.STORAGE_SYNCED_AT), anyString());
 
+        }
+    }
+    @Test
+    void syncStorage_shouldInsertOrphan_whenNoneMatchTrue() {
+        UUID orphanId = UUID.randomUUID();
+        String extension = "jpg";
+        String bucketFile = orphanId + "." + extension;
+        StorageEntity entityWrongExt = new StorageEntity();
+        entityWrongExt.setStorageId(orphanId);
+        entityWrongExt.setExtension("png");
+        StorageEntity entityWrongId = new StorageEntity();
+        entityWrongId.setStorageId(UUID.randomUUID());
+        entityWrongId.setExtension("jpg");
+        when(storageRepository.findAll()).thenReturn(List.of(entityWrongExt, entityWrongId));
+        doReturn(List.of(bucketFile)).when(storageService).getStorageBucketFiles();
+        try (MockedStatic<AppUtils> mockedAppUtils = mockStatic(AppUtils.class)) {
+            mockedAppUtils.when(AppUtils::getPrincipalUserId).thenReturn(UUID.randomUUID());
+            storageService.syncStorage();
+            verify(storageRepository).insertStorage(
+                    eq(orphanId), eq(""), eq("jpg"), eq(0L),
+                    eq(AppUtils.Constants.STORAGE_BUCKET_ORPHANED), any(UUID.class));
+        }
+    }
 }

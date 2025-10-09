@@ -21,7 +21,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-public class EnquiryServiceTest {
+class EnquiryServiceTest {
     @InjectMocks
     EnquiryService enquiryService;
     @Mock

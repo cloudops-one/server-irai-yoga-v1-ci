@@ -291,6 +291,14 @@ public class PracticeService {
         return practiceUserRepository.getByPracticeUserByPracticeIdAndUserId(practiceId, userId);
     }
 
+    /**
+     * Retrieves a map of practice users by their practice IDs.
+     *
+     * @param programUserIds
+     *            the list of practice IDs to retrieve users for
+     * @return a map where the key is the practice ID and the value is the
+     *         PracticeUserEntity
+     */
     private Map<UUID, PracticeUserEntity> getPracticeUsersByPracticeIds(List<UUID> programUserIds) {
         UUID principalUserId = AppUtils.getPrincipalUserId();
 
@@ -335,6 +343,13 @@ public class PracticeService {
     public List<PracticeEntity> getTop3Practices() {
         return practiceRepository.getTop3ByOrgIdAndPracticeStatusOrderByCreatedAtDesc(AppUtils.getPrincipalOrgId(),
                 AppUtils.PracticeStatus.ACTIVE);
+    }
+
+    public List<PracticeEntity> getViewedPractices() {
+        List<AppUtils.PracticeUserStatus> practiceUserStatus = List.of(AppUtils.PracticeUserStatus.IN_PROGRESS, AppUtils.PracticeUserStatus.STARTED);
+        List<UUID> practiceIds = practiceUserRepository.getPracticeUserEntityByUserIdAndPracticeUserStatusIn(
+                AppUtils.getPrincipalUserId(), practiceUserStatus).stream().map(PracticeUserEntity::getPracticeId).toList();
+        return practiceRepository.findAllById(practiceIds);
     }
 
     /**

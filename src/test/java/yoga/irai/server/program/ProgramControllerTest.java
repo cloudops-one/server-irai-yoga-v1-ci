@@ -29,11 +29,12 @@ import yoga.irai.server.storage.StorageService;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class ProgramControllerTest {
+class ProgramControllerTest {
     @Mock private LessonService lessonService;
     @Mock private ProgramService programService;
     @Mock private SectionService sectionService;
@@ -94,6 +95,7 @@ public class ProgramControllerTest {
         when(programService.getProgramResponseDto(programEntity)).thenReturn(programResponseDto);
         ResponseEntity<AppResponseDto<ProgramResponseDto>> response = programController.addProgram(programRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void updateProgramTest(){
@@ -101,6 +103,8 @@ public class ProgramControllerTest {
         when(programService.getProgramResponseDto(programEntity)).thenReturn(programResponseDto);
         ResponseEntity<AppResponseDto<ProgramResponseDto>> response = programController.updateProgram(programId , programRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
+
     }
     @Test
     void getProgramTest(){
@@ -108,37 +112,48 @@ public class ProgramControllerTest {
         when(programService.getProgramResponseDto(programEntity)).thenReturn(programResponseDto);
         ResponseEntity<AppResponseDto<ProgramResponseDto>> response = programController.getProgram(programId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void deleteProgramTest(){
         doNothing().when(programService).deleteProgram(programId);
         ResponseEntity<AppResponseDto<Void>> response = programController.deleteProgram(programId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void updateProgramStatusTest(){
         doNothing().when(programService).updateProgramStatus(programId, AppUtils.ProgramStatus.INACTIVE);
         ResponseEntity<AppResponseDto<Void>> response = programController.updateProgramStatus(programId, AppUtils.ProgramStatus.INACTIVE);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void addSectionTest(){
         when(sectionService.addSection(sectionRequestDto)).thenReturn(sectionEntity);
         ResponseEntity<AppResponseDto<SectionResponseDto>> response = programController.addSection(sectionRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void updateSectionTest(){
         when(sectionService.updateSection(sectionId, sectionRequestDto)).thenReturn(sectionEntity);
         ResponseEntity<AppResponseDto<SectionResponseDto>> response = programController.updateSection(sectionId , sectionRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getSectionTest(){
         when(sectionService.getSectionById(sectionId)).thenReturn(sectionEntity);
         ResponseEntity<AppResponseDto<SectionResponseDto>> response = programController.getSection(sectionId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getAllSectionsByProgramIdTest(){
         SectionResponseDto sectionResponseDto = new SectionResponseDto();
@@ -148,50 +163,65 @@ public class ProgramControllerTest {
         when(sectionService.toSectionResponseDtos(List.of(sectionEntity))).thenReturn(List.of(sectionResponseDto));
         ResponseEntity<AppResponseDto<List<SectionResponseDto>>> response =  programController.getAllSectionsByProgramId(programId);
         assert response.getStatusCode() == HttpStatus.OK;
-
+        assertNotNull(response.getBody());
     }
+
     @Test
     void deleteSectionTest(){
         doNothing().when(sectionService).deleteSection(sectionId);
         ResponseEntity<AppResponseDto<Void>> response = programController.deleteSection(sectionId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
+
     }
+
     @Test
     void addLessonTest(){
         when(lessonService.addLesson(lessonRequestDto)).thenReturn(lessonEntity);
         ResponseEntity<AppResponseDto<LessonResponseDto>> response = programController.addLesson(lessonRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void updateSectionTestDetails(){
         when(lessonService.updateLesson(lessonId, lessonRequestDto)).thenReturn(lessonEntity);
         ResponseEntity<AppResponseDto<LessonResponseDto>> response = programController.updateSection(lessonId , lessonRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void updateProgramStatusTestFlag(){
         doNothing().when(programService).updateProgramFlag(programId, AppUtils.ProgramFlag.TRENDING);
         ResponseEntity<AppResponseDto<Void>> response = programController.updateProgramStatus(programId , AppUtils.ProgramFlag.TRENDING);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getLessonTest(){
         when(lessonService.getLessonById(lessonId)).thenReturn(lessonEntity);
         ResponseEntity<AppResponseDto<LessonResponseDto>> response = programController.getLesson(lessonId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void deleteLessonTest(){
         doNothing().when(lessonService).deleteLesson(lessonId);
         ResponseEntity<AppResponseDto<Void>> response = programController.deleteLesson(lessonId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getPortalDashboardTest(){
         when(programService.getTotalPrograms()).thenReturn(5L);
         ResponseEntity<AppResponseDto<TotalDto>> response = programController.getPortalDashboard();
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getAllLessonsBySectionIdTest(){
         LessonResponseDto lessonResponseDto = new LessonResponseDto();
@@ -201,7 +231,9 @@ public class ProgramControllerTest {
         when(lessonService.toLessonResponseDtos(List.of(lessonEntity))).thenReturn(List.of(lessonResponseDto));
         ResponseEntity<AppResponseDto<List<LessonResponseDto>>> response =  programController.getAllLessonsBySectionId(sectionId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getProgramPageTest(){
         Page<ProgramEntity> programPage = new PageImpl<>(List.of(programEntity),
@@ -213,5 +245,6 @@ public class ProgramControllerTest {
         ResponseEntity<AppResponseDto<List<ProgramResponseDto>>> response = programController
                 .getProgram(0 , 10 , "createdAt" , Sort.Direction.DESC , "Test");
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
 }

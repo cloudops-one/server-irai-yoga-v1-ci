@@ -19,7 +19,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class SettingControllerTest {
+class SettingControllerTest {
     @Mock
     private SettingService settingService;
     @InjectMocks

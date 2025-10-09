@@ -9,7 +9,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mockStatic;
 
-public class UserEntityTest {
+class UserEntityTest {
     @Test
     void onCreateTest() {
         UUID userId = UUID.randomUUID();

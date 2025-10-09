@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class SettingServiceTest {
+class SettingServiceTest {
     @Mock
     private SettingRepository settingRepository;
 
@@ -35,6 +35,7 @@ public class SettingServiceTest {
         assertEquals("COUNTRY", result.getSettingName());
         assertEquals("India", result.getSettingValue());
     }
+
     @Test
     void testUpdateSettingAddsOldTags()  {
         Set<String> oldTags = new HashSet<>(Set.of("tag1", "tag2"));
@@ -56,6 +57,22 @@ public class SettingServiceTest {
         assertEquals(expectedTags, actualTags);
         verify(settingRepository, times(1)).save(settingEntity);
     }
+
+    @Test
+    void testUpdateSetting_withOutOldTags()  {
+        Set<String> oldTags = new HashSet<>();
+        String oldTagsJson = AppUtils.writeValueAsString(oldTags);
+        SettingEntity settingEntity = SettingEntity.builder()
+                .settingName(AppUtils.SettingName.MODULE_TYPE.getSetting()) // Use exact enum value
+                .settingValue(oldTagsJson)
+                .build();
+        when(settingRepository.findBySettingName(AppUtils.SettingName.MODULE_TYPE.getSetting()))
+                .thenReturn(Optional.of(settingEntity));
+        Set<String> newTags = new HashSet<>(Set.of("tag3"));
+        settingService.updateSetting(AppUtils.SettingName.MODULE_TYPE, newTags);
+        verify(settingRepository, times(1)).save(settingEntity);
+    }
+
     @Test
     void testUpdateSettingSettingNotFound() {
         when(settingRepository.findBySettingName(AppUtils.SettingName.MODULE_TYPE.getSetting()))
@@ -69,6 +86,7 @@ public class SettingServiceTest {
         assertTrue(exception.getMessage().contains(expectedMessage));
         verify(settingRepository, never()).save(any());
     }
+
     @Test
     void testUpdateSync() {
         SettingEntity settingEntity = SettingEntity.builder()

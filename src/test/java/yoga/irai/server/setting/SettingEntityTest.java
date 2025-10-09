@@ -6,7 +6,7 @@ import yoga.irai.server.app.AppUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class SettingEntityTest {
+class SettingEntityTest {
     @Test
     void testPrePersistSetsStatusToInactive() {
         SettingEntity entity = new SettingEntity();

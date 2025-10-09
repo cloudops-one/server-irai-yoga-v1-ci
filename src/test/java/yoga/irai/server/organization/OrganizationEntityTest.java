@@ -6,7 +6,7 @@ import yoga.irai.server.app.AppUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class OrganizationEntityTest {
+class OrganizationEntityTest {
     @Test
     void onCreateTest(){
         OrganizationEntity organizationEntity = new OrganizationEntity();

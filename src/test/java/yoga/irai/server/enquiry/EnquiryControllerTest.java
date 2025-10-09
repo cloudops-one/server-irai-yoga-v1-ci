@@ -10,10 +10,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import yoga.irai.server.app.dto.AppResponseDto;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.doNothing;
 
 @ExtendWith(MockitoExtension.class)
-public class EnquiryControllerTest {
+class EnquiryControllerTest {
     @Mock
     private EnquiryService enquiryService;
     @InjectMocks
@@ -32,5 +33,6 @@ public class EnquiryControllerTest {
         doNothing().when(enquiryService).updateEnquiry(enquiryRequestDto);
         ResponseEntity<AppResponseDto<Void>> response = enquiryController.addEnquiry(enquiryRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
 }

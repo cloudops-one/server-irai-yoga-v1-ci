@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class SectionServiceTest {
+class SectionServiceTest {
     @Mock
     private UserService userService;
     @Mock private LessonRepository lessonRepository;
@@ -169,12 +169,12 @@ public class SectionServiceTest {
     void toSectionResponseDto_ShouldMapEntitiesToDto() {
         UUID createdBy = UUID.randomUUID();
         UUID updatedBy = UUID.randomUUID();
-        SectionEntity sectionEntity = new SectionEntity();
-        sectionEntity.setSectionId(UUID.randomUUID());
-        sectionEntity.setSectionName("Test Section");
-        sectionEntity.setCreatedBy(createdBy);
-        sectionEntity.setUpdatedBy(updatedBy);
-        List<SectionEntity> sectionEntities = List.of(sectionEntity);
+        SectionEntity section = new SectionEntity();
+        section.setSectionId(UUID.randomUUID());
+        section.setSectionName("Test Section");
+        section.setCreatedBy(createdBy);
+        section.setUpdatedBy(updatedBy);
+        List<SectionEntity> sectionEntities = List.of(section);
         Map<UUID, String> userNames = new HashMap<>();
         userNames.put(createdBy, "Creator User");
         userNames.put(updatedBy, "Updater User");
@@ -182,7 +182,7 @@ public class SectionServiceTest {
         List<SectionResponseDto> result = sectionService.toSectionResponseDtos(sectionEntities);
         assertThat(result).hasSize(1);
         SectionResponseDto dto = result.getFirst();
-        assertThat(dto.getSectionId()).isEqualTo(sectionEntity.getSectionId());
+        assertThat(dto.getSectionId()).isEqualTo(section.getSectionId());
         assertThat(dto.getSectionName()).isEqualTo("Test Section");
         assertThat(dto.getCreatedByName()).isEqualTo("Creator User");
         assertThat(dto.getUpdatedByName()).isEqualTo("Updater User");

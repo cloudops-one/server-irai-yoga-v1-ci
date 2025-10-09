@@ -5,14 +5,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 import yoga.irai.server.app.AppUtils;
 import yoga.irai.server.app.exception.AppException;
-import yoga.irai.server.authentication.entity.UserEntity;
-import yoga.irai.server.authentication.entity.UserPrincipalEntity;
 import yoga.irai.server.authentication.service.UserService;
 import yoga.irai.server.mobile.dto.LessonMobileResponseDto;
 import yoga.irai.server.program.ProgramEntity;
@@ -33,7 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class LessonServiceTest {
+class LessonServiceTest {
     @Mock
     private LessonRepository lessonRepository;
     @Mock
@@ -162,6 +159,95 @@ public class LessonServiceTest {
         verify(lessonRepository).save(result);
         verify(lessonRepository, times(1)).save(lessonEntity);
     }
+    @Test
+    void updateLesson_shouldSetExternalUrl_whenStorageIdIsNull() {
+        LessonEntity lesson = LessonEntity.builder()
+                .lessonId(lessonId)
+                .lessonStorageId(UUID.randomUUID())
+                .lessonExternalUrl(null)
+                .sectionId(sectionId)
+                .duration(10L)
+                .build();
+        LessonRequestDto dto = new LessonRequestDto();
+        dto.setLessonStorageId(null);
+        dto.setLessonExternalUrl("//example.com/video.mp4");
+        dto.setSectionId(sectionId);
+        dto.setDuration(20L);
+        SectionEntity section = new SectionEntity();
+        section.setSectionId(sectionId);
+        section.setProgramId(programId);
+        ProgramEntity program = new ProgramEntity();
+        program.setProgramId(programId);
+        program.setDuration(100L);
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(lesson));
+        when(sectionService.getSectionById(sectionId)).thenReturn(section);
+        when(programService.getProgramById(programId)).thenReturn(program);
+        when(lessonRepository.save(any())).thenReturn(lesson);
+        LessonEntity result = lessonService.updateLesson(lessonId, dto);
+        verify(storageService, never()).deleteStorageById(any());
+        assertNull(result.getLessonStorageId());
+        assertEquals("//example.com/video.mp4", result.getLessonExternalUrl());
+    }
+
+    @Test
+    void updateLesson_shouldDeleteOldStorage_whenAllConditionsTrue() {
+        UUID oldStorageId = UUID.randomUUID();
+        UUID newStorageId = UUID.randomUUID();
+        LessonEntity lesson = LessonEntity.builder()
+                .lessonId(lessonId)
+                .lessonExternalUrl(null)
+                .lessonStorageId(oldStorageId)
+                .sectionId(sectionId)
+                .duration(10L)
+                .build();
+        LessonRequestDto dto = new LessonRequestDto();
+        dto.setLessonStorageId(newStorageId);
+        dto.setLessonExternalUrl(null);
+        dto.setSectionId(sectionId);
+        dto.setDuration(20L);
+        SectionEntity section = SectionEntity.builder()
+                .sectionId(sectionId)
+                .programId(programId)
+                .build();
+        ProgramEntity program = ProgramEntity.builder()
+                .programId(programId)
+                .duration(100L)
+                .build();
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(lesson));
+        when(sectionService.getSectionById(sectionId)).thenReturn(section);
+        when(programService.getProgramById(programId)).thenReturn(program);
+        when(lessonRepository.save(any())).thenReturn(lesson);
+        lessonService.updateLesson(lessonId, dto);
+        verify(storageService).deleteStorageById(oldStorageId);
+    }
+    @Test
+    void updateLesson_shouldNotDeleteStorage_whenIdsSame() {
+        UUID sameId = UUID.randomUUID();
+        LessonEntity lesson = LessonEntity.builder()
+                .lessonId(lessonId)
+                .lessonStorageId(sameId)
+                .lessonExternalUrl(null)
+                .sectionId(sectionId)
+                .duration(10L)
+                .build();
+        LessonRequestDto dto = new LessonRequestDto();
+        dto.setLessonStorageId(sameId);
+        dto.setLessonExternalUrl(null);
+        dto.setSectionId(sectionId);
+        dto.setDuration(15L);
+        SectionEntity section = new SectionEntity();
+        section.setSectionId(sectionId);
+        section.setProgramId(programId);
+        ProgramEntity program = new ProgramEntity();
+        program.setProgramId(programId);
+        program.setDuration(100L);
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(lesson));
+        when(sectionService.getSectionById(sectionId)).thenReturn(section);
+        when(programService.getProgramById(programId)).thenReturn(program);
+        when(lessonRepository.save(any())).thenReturn(lesson);
+        lessonService.updateLesson(lessonId, dto);
+        verify(storageService, never()).deleteStorageById(any());
+    }
 
     @Test
     void getAllLessonByProgramIdTest() {
@@ -218,48 +304,84 @@ public class LessonServiceTest {
     }
     @Test
     void toLessonMobileResponseDto_ShouldMapEntitiesToDto() {
-        SecurityContext securityContext = mock(SecurityContext.class);
-        Authentication authentication = mock(Authentication.class);
-        UserPrincipalEntity principal = mock(UserPrincipalEntity.class);
-        UserEntity userEntity = mock(UserEntity.class);
-        when(userEntity.getUserId()).thenReturn(UUID.randomUUID());
-        when(principal.user()).thenReturn(userEntity);
-        when(authentication.getPrincipal()).thenReturn(principal);
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        SecurityContextHolder.setContext(securityContext);
-        when(storageService.getStorageUrl(lessonEntity.getLessonStorageId()))
-                .thenReturn("signedLessonUrl");
-        List<LessonMobileResponseDto> lessonMobileResponseDto = lessonService.toLessonMobileResponseDtos(List.of(lessonEntity));
-        assertNotNull(lessonMobileResponseDto);
-        assertEquals(1, lessonMobileResponseDto.size());
-        LessonMobileResponseDto dto = lessonMobileResponseDto.getFirst();
-        assertEquals("Lesson 1", dto.getLessonName());
-        assertEquals("signedLessonUrl", dto.getLessonStorageUrl());
-        assertNull(dto.getLessonUserId());
-        assertNull(dto.getLessonUserStatus());
-        assertNull(dto.getResumeTime());
-        verify(storageService, times(1)).getStorageUrl(lessonEntity.getLessonStorageId());
+        try (MockedStatic<AppUtils> mockedAppUtils = mockStatic(AppUtils.class)) {
+            mockedAppUtils.when(AppUtils::getPrincipalUserId).thenReturn(userId);
+            LessonMobileResponseDto mappedDto = new LessonMobileResponseDto();
+            mappedDto.setLessonName("Lesson 1");
+            mockedAppUtils.when(() -> AppUtils.map(lessonEntity, LessonMobileResponseDto.class))
+                    .thenReturn(mappedDto);
+            when(storageService.getStorageUrl(lessonEntity.getLessonStorageId()))
+                    .thenReturn("signedLessonUrl");
+            List<LessonMobileResponseDto> lessonMobileResponseDto =
+                    lessonService.toLessonMobileResponseDtos(List.of(lessonEntity));
+            assertNotNull(lessonMobileResponseDto);
+            assertEquals(1, lessonMobileResponseDto.size());
+            LessonMobileResponseDto dto = lessonMobileResponseDto.getFirst();
+            assertEquals("Lesson 1", dto.getLessonName());
+            assertEquals("signedLessonUrl", dto.getLessonStorageUrl());
+            assertNull(dto.getLessonUserId());
+            assertNull(dto.getLessonUserStatus());
+            assertNull(dto.getResumeTime());
+            verify(storageService, times(1)).getStorageUrl(lessonEntity.getLessonStorageId());
+        }
     }
+
+    @Test
+    void toLessonMobileResponseDto_ShouldMapUserDetails_WhenLessonUserExists() {
+        try (MockedStatic<AppUtils> mockedAppUtils = mockStatic(AppUtils.class)) {
+            mockedAppUtils.when(AppUtils::getPrincipalUserId).thenReturn(userId);
+            LessonEntity lesson = LessonEntity.builder()
+                    .lessonId(lessonId)
+                    .lessonName("Lesson 1")
+                    .lessonStorageId(UUID.randomUUID())
+                    .build();
+            LessonUserEntity lessonUser = LessonUserEntity.builder()
+                    .lessonUserId(UUID.randomUUID())
+                    .lessonUserStatus(AppUtils.LessonUserStatus.IN_PROGRESS)
+                    .resumeTime(120L)
+                    .build();
+            LessonMobileResponseDto mappedDto = new LessonMobileResponseDto();
+            mappedDto.setLessonName(lesson.getLessonName());
+            mockedAppUtils.when(() -> AppUtils.map(lesson, LessonMobileResponseDto.class))
+                    .thenReturn(mappedDto);
+            LessonService spyLessonService = Mockito.spy(lessonService);
+            when(lessonUserRepository.findByLessonIdAndUserId(any(), any()))
+                    .thenReturn(Optional.of(lessonUser));
+            when(storageService.getStorageUrl(lesson.getLessonStorageId()))
+                    .thenReturn("signedLessonUrl");
+            List<LessonMobileResponseDto> result = spyLessonService.toLessonMobileResponseDtos(List.of(lesson));
+            assertNotNull(result);
+            assertEquals(1, result.size());
+            LessonMobileResponseDto dto = result.getFirst();
+            assertEquals(lessonUser.getLessonUserId(), dto.getLessonUserId());
+            assertEquals(lessonUser.getLessonUserStatus(), dto.getLessonUserStatus());
+            assertEquals(lessonUser.getResumeTime(), dto.getResumeTime());
+            assertEquals("signedLessonUrl", dto.getLessonStorageUrl());
+            verify(storageService, times(1)).getStorageUrl(lesson.getLessonStorageId());
+        }
+    }
+
     @Test
     void testToLessonResponseDtoTest() {
         UUID createdBy = UUID.randomUUID();
         UUID updatedBy = UUID.randomUUID();
         UUID storageId = UUID.randomUUID();
-        LessonEntity lessonEntity = new LessonEntity();
-        lessonEntity.setCreatedBy(createdBy);
-        lessonEntity.setUpdatedBy(updatedBy);
-        lessonEntity.setLessonStorageId(storageId);
-        List<LessonEntity> lessonEntities = List.of(lessonEntity);
+        LessonEntity lesson = new LessonEntity();
+        lesson.setCreatedBy(createdBy);
+        lesson.setUpdatedBy(updatedBy);
+        lesson.setLessonStorageId(storageId);
+        List<LessonEntity> lessonEntities = List.of(lesson);
         Map<UUID, String> userNamesByIds = new HashMap<>();
-        userNamesByIds.put(createdBy, "Hilton");
-        userNamesByIds.put(updatedBy, "Paul");
+        userNamesByIds.put(createdBy, "Test");
+        userNamesByIds.put(updatedBy, "Lesson");
         when(userService.getUserData(lessonEntities)).thenReturn(userNamesByIds);
         when(storageService.getStorageUrl(storageId)).thenReturn("https://www.google.com");
         List<LessonResponseDto> lessonResponseDto = lessonService.toLessonResponseDtos(lessonEntities);
         assertEquals(1, lessonResponseDto.size());
         LessonResponseDto dto = lessonResponseDto.getFirst();
-        assertEquals("Hilton", dto.getCreatedByName());
-        assertEquals("Paul", dto.getUpdatedByName());
+        assertEquals("Test", dto.getCreatedByName());
+        assertEquals("Lesson", dto.getUpdatedByName());
         assertEquals("https://www.google.com", dto.getLessonStorageUrl());
     }
+
 }

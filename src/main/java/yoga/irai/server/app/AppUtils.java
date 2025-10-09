@@ -222,6 +222,10 @@ public interface AppUtils {
         STARTED, IN_PROGRESS, COMPLETE
     }
 
+    enum ShortsUserStatus {
+        SEEN, NEW
+    }
+
     enum UserType {
         PORTAL_USER, MOBILE_USER, KEYCLOAK_USER
     }

@@ -5,7 +5,7 @@ import yoga.irai.server.app.AppUtils;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-public class ProgramEntityTest {
+class ProgramEntityTest {
     @Test
     void onCreate_ShouldSetProgramStatusToInactive() {
         ProgramEntity entity = ProgramEntity.builder()
@@ -13,7 +13,7 @@ public class ProgramEntityTest {
                 .build();
         entity.onCreate();
         assertThat(entity.getProgramStatus()).isEqualTo(AppUtils.ProgramStatus.INACTIVE);
-        assertThat(entity.getDuration()).isEqualTo(0L);
-        assertThat(entity.getNumberOfLessons()).isEqualTo(0);
+        assertThat(entity.getDuration()).isZero();
+        assertThat(entity.getNumberOfLessons()).isZero();
     }
 }

@@ -54,11 +54,13 @@ public class ShortsEntity extends Auditable implements Serializable {
     @Column(name = "duration")
     private Long duration;
 
+    @Builder.Default
     @Column(name = "likes")
-    private Long likes;
+    private Long likes = 0L;
 
+    @Builder.Default
     @Column(name = "views")
-    private Long views;
+    private Long views = 0L;
 
     @Column(name = "tags")
     private String tags;

@@ -29,6 +29,8 @@ public class ShortsMobileResponseDto implements Serializable {
     private String orgName;
     private Long duration;
     private Long likes;
+    private Boolean isLiked;
+    private String comments;
     private Long views;
     private Set<String> tags;
 }

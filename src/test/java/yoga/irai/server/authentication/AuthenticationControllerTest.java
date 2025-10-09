@@ -34,7 +34,7 @@ import yoga.irai.server.authentication.service.UserService;
 import yoga.irai.server.provider.OtpService;
 
 @ExtendWith(MockitoExtension.class)
-public class AuthenticationControllerTest {
+class AuthenticationControllerTest {
 
     @Mock
     private OtpService otpService;
@@ -140,6 +140,7 @@ public class AuthenticationControllerTest {
 
          ResponseEntity<AppResponseDto<SignInResponseDto>> response = authenticationController.
                  refreshAccessToken(refreshTokenRequestDto);
+         verify(jwtService).extractUsername(refreshTokenRequestDto.getRefreshToken());
          assert response.getStatusCode() == HttpStatus.OK;
      }
 

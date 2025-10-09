@@ -20,6 +20,8 @@ import yoga.irai.server.mobile.dto.ShortsMobileResponseDto;
 import yoga.irai.server.notification.NotificationService;
 import yoga.irai.server.organization.OrganizationService;
 import yoga.irai.server.setting.SettingService;
+import yoga.irai.server.shorts.user.ShortsUserEntity;
+import yoga.irai.server.shorts.user.ShortsUserRepository;
 import yoga.irai.server.storage.StorageService;
 
 /**
@@ -35,6 +37,7 @@ public class ShortsService {
     private final ShortsRepository shortsRepository;
     private final OrganizationService organizationService;
     private final NotificationService notificationService;
+    private final ShortsUserRepository shortsUserRepository;
 
     /**
      * Adds anew shorts
@@ -198,7 +201,39 @@ public class ShortsService {
      * @param shortsId
      *            the ID of the shorts to update
      */
+    @Transactional
     public void updateLikeCount(UUID shortsId) {
+        ShortsUserEntity shortsUser = shortsUserRepository.findShortsUserEntityByShortsIdAndUserId(shortsId,
+                AppUtils.getPrincipalUserId());
+        if (ObjectUtils.isEmpty(shortsUser)) {
+            shortsUser = new ShortsUserEntity();
+            shortsUser.setShortsId(shortsId);
+            shortsUser.setUserId(AppUtils.getPrincipalUserId());
+        }
+        shortsUser.setLikes(true);
+        ShortsEntity shortsEntity = getShortsById(shortsId);
+        shortsEntity.setLikes(shortsEntity.getLikes() + 1);
+        shortsUserRepository.save(shortsUser);
+        shortsRepository.save(shortsEntity);
+    }
+
+    /**
+     * Updates the comments for a shorts user.
+     *
+     * @param shortsId
+     *            the ID of the shorts to update
+     */
+    @Transactional
+    public void updateComment(UUID shortsId, String comment) {
+        ShortsUserEntity shortsUser = shortsUserRepository.findShortsUserEntityByShortsIdAndUserId(shortsId,
+                AppUtils.getPrincipalUserId());
+        if (ObjectUtils.isEmpty(shortsUser)) {
+            shortsUser = new ShortsUserEntity();
+            shortsUser.setShortsId(shortsId);
+            shortsUser.setUserId(AppUtils.getPrincipalUserId());
+        }
+        shortsUser.setComments(comment);
+        shortsUserRepository.save(shortsUser);
         ShortsEntity shortsEntity = getShortsById(shortsId);
         shortsEntity.setLikes(shortsEntity.getLikes() + 1);
         shortsRepository.save(shortsEntity);
@@ -225,6 +260,13 @@ public class ShortsService {
     public List<ShortsEntity> getTop3Shorts() {
         return shortsRepository.getTop3ByOrgIdAndShortsStatusOrderByCreatedAtDesc(AppUtils.getPrincipalOrgId(),
                 AppUtils.ShortsStatus.ACTIVE);
+    }
+
+    public List<ShortsEntity> getViewedShorts() {
+        List<AppUtils.ShortsUserStatus> shortsUserStatus = List.of(AppUtils.ShortsUserStatus.NEW, AppUtils.ShortsUserStatus.SEEN);
+        List<UUID> shortsIds = shortsUserRepository.getShortsIdsByUserIdAndShortsUserStatusIn(AppUtils.getPrincipalUserId(), shortsUserStatus)
+                .stream().map(ShortsUserEntity::getShortsId).toList();
+        return shortsRepository.findAllById(shortsIds);
     }
 
     /**
@@ -275,6 +317,23 @@ public class ShortsService {
     }
 
     /**
+     * Retrieves a map of ShortsUserEntity by their shorts IDs for the current user.
+     *
+     * @param shortsUserIds
+     *            the list of shorts IDs to retrieve
+     * @return a map of shorts IDs to their corresponding ShortsUserEntity
+     */
+    private Map<UUID, ShortsUserEntity> getShortsUserByShortsId(List<UUID> shortsUserIds) {
+        UUID principalUserId = AppUtils.getPrincipalUserId();
+
+        return shortsUserIds.stream().map(shortsId -> {
+            ShortsUserEntity entity = shortsUserRepository.findShortsUserEntityByShortsIdAndUserId(shortsId,
+                    principalUserId);
+            return entity != null ? Map.entry(shortsId, entity) : null;
+        }).filter(Objects::nonNull).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
      * Converts a list of ShortsEntity to a list of ShortsResponseDto.
      *
      * @param shortsEntities
@@ -317,11 +376,21 @@ public class ShortsService {
                                 .flatMap(shortsEntity -> Stream.of(shortsEntity.getShortsStorageId(),
                                         shortsEntity.getShortsBannerStorageId()))
                                 .filter(Objects::nonNull).distinct().toList());
+        Map<UUID, ShortsUserEntity> shortsUserEntityMap = getShortsUserByShortsId(
+                shortsEntities.stream().flatMap(shortsEntity -> Stream.of(shortsEntity.getShortsId()))
+                        .filter(Objects::nonNull).distinct().toList());
         return shortsEntities.stream().map(shortsEntity -> {
             ShortsMobileResponseDto shortsMobileResponseDto = AppUtils.map(shortsEntity, ShortsMobileResponseDto.class);
             shortsMobileResponseDto.setShortsStorageUrl(signedStorageUrlByIds.get(shortsEntity.getShortsStorageId()));
             shortsMobileResponseDto
                     .setShortsBannerStorageUrl(signedStorageUrlByIds.get(shortsEntity.getShortsBannerStorageId()));
+            if(ObjectUtils.isNotEmpty(shortsUserEntityMap.get(shortsEntity.getShortsId()))) {
+                shortsMobileResponseDto.setIsLiked(shortsUserEntityMap.get(shortsEntity.getShortsId()).getLikes());
+                shortsMobileResponseDto.setComments(shortsUserEntityMap.get(shortsEntity.getShortsId()).getComments());
+            } else {
+                shortsMobileResponseDto.setIsLiked(false);
+                shortsMobileResponseDto.setComments("");
+            }
             shortsMobileResponseDto.setTags(AppUtils.readValue(shortsEntity.getTags(), new TypeReference<>() {
             }));
             return shortsMobileResponseDto;

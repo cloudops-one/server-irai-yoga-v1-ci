@@ -25,7 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class ShortsControllerTest {
+class ShortsControllerTest {
     @Mock
     private ShortsService shortsService;
     @InjectMocks
@@ -77,21 +77,27 @@ public class ShortsControllerTest {
         when(shortsService.getShortsResponseDto(shortsEntity)).thenReturn(shortsResponseDto);
         ResponseEntity<AppResponseDto<ShortsResponseDto>> response =  shortsController.addShorts(shortsRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void updateShortsTest(){
         when(shortsService.updateShorts(shortsId, shortsRequestDto)).thenReturn(shortsEntity);
         when(shortsService.getShortsResponseDto(shortsEntity)).thenReturn(shortsResponseDto);
         ResponseEntity<AppResponseDto<ShortsResponseDto>> response =  shortsController.updateShorts(shortsId , shortsRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getShortsTest(){
         when(shortsService.getShortsById(shortsId)).thenReturn(shortsEntity);
         when(shortsService.getShortsResponseDto(shortsEntity)).thenReturn(shortsResponseDto);
         ResponseEntity<AppResponseDto<ShortsResponseDto>> response =  shortsController.getShorts(shortsId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
+
     @Test
     void getShortsListTest() {
         int pageNumber = 0;

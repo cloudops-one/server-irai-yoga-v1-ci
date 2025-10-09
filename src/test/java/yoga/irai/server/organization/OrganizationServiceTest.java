@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
-public class OrganizationServiceTest {
+class OrganizationServiceTest {
     @Mock
     private OrganizationRepository organizationRepository;
     @Mock
@@ -129,6 +129,20 @@ public class OrganizationServiceTest {
         assertEquals(organizationRequestDto.getOrgName(), result.getOrgName());
         assertEquals(organizationRequestDto.getOrgIconStorageId(), result.getOrgIconStorageId());
     }
+    @Test
+    void updateOrganizationTest_IfConditionFails() {
+        UUID id1 = UUID.randomUUID();
+        organizationEntity.setOrgIconStorageId(id1);
+        organizationRequestDto.setOrgIconStorageId(id1);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(organizationEntity));
+        when(organizationRepository.save(any(OrganizationEntity.class))).thenAnswer(i -> i.getArgument(0));
+        OrganizationEntity result = organizationService.updateOrganization(orgId, organizationRequestDto);
+        verify(storageService, never()).deleteStorageById(any(UUID.class));
+        verify(organizationRepository, times(1)).save(any(OrganizationEntity.class));
+        assertEquals(orgId, result.getOrgId());
+        assertEquals(organizationRequestDto.getOrgName(), result.getOrgName());
+        assertEquals(organizationRequestDto.getOrgIconStorageId(), result.getOrgIconStorageId());
+    }
 
     @Test
     void getOrganizationsMobileUserTest() {
@@ -167,7 +181,6 @@ public class OrganizationServiceTest {
             )).thenReturn(pageResult);
             OrganizationService service = new OrganizationService(appProperties, storageService, organizationRepository);
             Page<OrganizationDropdownDto> result = service.getOrganizationDropdown(pageNumber, pageSize, sortBy, direction, keyword);
-
             assertNotNull(result);
             assertEquals(1, result.getContent().size());
         }
@@ -188,7 +201,6 @@ public class OrganizationServiceTest {
             )).thenReturn(pageResult);
             OrganizationService service = new OrganizationService(appProperties, storageService, organizationRepository);
             Page<OrganizationDropdownDto> result = service.getOrganizationDropdown(pageNumber, pageSize, sortBy, direction, keyword);
-
             assertNotNull(result);
             assertEquals(1, result.getContent().size());
         }
@@ -266,6 +278,13 @@ public class OrganizationServiceTest {
         String result = organizationService.getOrgNameByOrgId(orgId);
         assertNotNull(result);
     }
+    @Test
+    void getOrgNameByOrgIdTest_Null(){
+        when(organizationRepository.findByOrgId(orgId)).thenReturn(null);
+        String result = organizationService.getOrgNameByOrgId(orgId);
+        assertEquals("" , result);
+        assertNotNull(result);
+    }
 
     @Test
     void getOrgNamesByIdsTest() {
@@ -321,7 +340,6 @@ public class OrganizationServiceTest {
 
     @Test
     void getOrgIconStorageIdToSignedIconUrlTest() {
-        UUID orgId = UUID.randomUUID();
         UUID iconStorageId = UUID.randomUUID();
         String signedUrl = "https://storage-service.com/" + iconStorageId;
         organizationEntity.setOrgId(orgId);
@@ -333,6 +351,7 @@ public class OrganizationServiceTest {
         verify(organizationRepository, times(1)).findById(orgId);
         verify(storageService, times(1)).getStorageUrl(iconStorageId);
     }
+
 
     @Test
     void getOrgIconStorageIdToSignedIconUrlReturnMapTest() {
@@ -361,6 +380,51 @@ public class OrganizationServiceTest {
         assertEquals("https://signed-url.com/icon1.png", result.get(orgId1));
         assertEquals("https://signed-url.com/icon2.png", result.get(orgId2));
         verify(organizationRepository, times(2)).findOrgIconStorageIdByOrgIdIn(orgIds);
+    }
+
+    @Test
+    void getOrgIconStorageIdToSignedIconUrl_Null() {
+        UUID orgId1 = UUID.randomUUID();
+        UUID orgId2 = UUID.randomUUID();
+        UUID storageId1 = UUID.randomUUID();
+        UUID storageId2 = UUID.randomUUID();
+        List<UUID> orgIds = List.of(orgId1, orgId2);
+        OrganizationDropdownDto dto1 = mock(OrganizationDropdownDto.class);
+        when(dto1.getOrgId()).thenReturn(orgId1);
+        when(dto1.getOrgIconStorageId()).thenReturn(storageId1.toString());
+        OrganizationDropdownDto dto2 = mock(OrganizationDropdownDto.class);
+        when(dto2.getOrgId()).thenReturn(orgId2);
+        when(dto2.getOrgIconStorageId()).thenReturn(storageId2.toString());
+        List<OrganizationDropdownDto> dtoList = List.of(dto1, dto2);
+        when(organizationRepository.findOrgIconStorageIdByOrgIdIn(orgIds)).thenReturn(dtoList);
+        when(storageService.getSignedStorageUrlByIds(anyList()))
+                .thenReturn(null);
+        Map<UUID, String> result = organizationService.getOrgIconStorageIdToSignedIconUrl(orgIds);
+        assertNotNull(result);
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    void getOrgIconStorageIdToSignedIconUrl_IfConditionTriggered() {
+        UUID orgId1 = UUID.randomUUID();
+        UUID orgId2 = UUID.randomUUID();
+        UUID storageId1 = UUID.randomUUID();
+        UUID storageId2 = UUID.randomUUID();
+        List<UUID> orgIds = List.of(orgId1, orgId2);
+        OrganizationDropdownDto dto1 = mock(OrganizationDropdownDto.class);
+        when(dto1.getOrgId()).thenReturn(orgId1);
+        when(dto1.getOrgIconStorageId()).thenReturn(storageId1.toString());
+        OrganizationDropdownDto dto2 = mock(OrganizationDropdownDto.class);
+        when(dto2.getOrgId()).thenReturn(orgId2);
+        when(dto2.getOrgIconStorageId()).thenReturn(storageId2.toString());
+        List<OrganizationDropdownDto> dtoList = List.of(dto1, dto2);
+        when(organizationRepository.findOrgIconStorageIdByOrgIdIn(orgIds)).thenReturn(dtoList);
+        when(storageService.getSignedStorageUrlByIds(anyList())).thenReturn(Collections.emptyMap());
+        Map<UUID, String> result = organizationService.getOrgIconStorageIdToSignedIconUrl(orgIds);
+        assertNotNull(result);
+        assertTrue(result.isEmpty(), "Expected empty map because signedIconUrls was empty");
+        verify(organizationRepository, times(1)).findOrgIconStorageIdByOrgIdIn(orgIds);
+        verify(storageService, times(1)).getSignedStorageUrlByIds(anyList());
     }
 
     @Test

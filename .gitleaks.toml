@@ -1,9 +1,0 @@
-title = "Project Gitleaks Config"
-
-[extend]
-useDefault = true
-
-[allowlist]
-description = "Ignore build.gradle false positive"
-files = ["build.gradle"]
-regexes = ['''.*''']  # required dummy regex (matches everything)

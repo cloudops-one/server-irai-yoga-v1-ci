@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-public class ProgramUserEntityTest {
+class ProgramUserEntityTest {
     @Test
     void onCreateTest() {
         ProgramUserEntity entity = ProgramUserEntity.builder()

@@ -519,6 +519,23 @@ public class MobileController {
     }
 
     /**
+     * Updates the like count of a shorts' entry.
+     *
+     * @param shortsId
+     *            the ID of the shorts to update like count
+     * @return a response audit indicating the result of the like count update
+     */
+    @Tag(name = "Shorts")
+    @PutMapping("/shorts/comment/{shortsId}")
+    @Operation(summary = "Update shorts like count", description = "Increments the like count of a shorts entry.")
+    public ResponseEntity<AppResponseDto<Void>> changeLikeCount(@PathVariable UUID shortsId,
+            @RequestParam String comments) {
+        AppResponseDto.AppResponseDtoBuilder<Void> builder = AppResponseDto.builder();
+        shortsService.updateComment(shortsId, comments);
+        return ResponseEntity.ok(builder.message(AppUtils.Messages.UPDATE_SUCCESS.getMessage()).build());
+    }
+
+    /**
      * Creates a new program user.
      *
      * @param programUserRequestDto
@@ -716,6 +733,46 @@ public class MobileController {
     }
 
     /**
+     * Retrieves the top 3 practices, programs, shorts, and events for the mobile
+     * dashboard.
+     *
+     * @return ResponseEntity containing the dashboard data
+     */
+    @Tag(name = "Dashboard")
+    @GetMapping("/dashboard/practice/recents")
+    @Operation(summary = "Get Practice Dashboard", description = "Get the recent practices for the mobile dashboard.")
+    public ResponseEntity<AppResponseDto<List<PracticeMobileResponseDto>>> getPracticeViewedDashboard() {
+        AppResponseDto.AppResponseDtoBuilder<List<PracticeMobileResponseDto>> builder = AppResponseDto.builder();
+        return ResponseEntity.ok(builder.data(getPracticesViewedForMobileDashboard()).build());
+    }
+
+    /**
+     * Retrieves the top 3 programs, shorts, and events for the mobile dashboard.
+     *
+     * @return ResponseEntity containing the dashboard data
+     */
+    @Tag(name = "Dashboard")
+    @GetMapping("/dashboard/program/recents")
+    @Operation(summary = "Get Program Dashboard", description = "Get the recent programs for the mobile dashboard.")
+    public ResponseEntity<AppResponseDto<List<ProgramMobileResponseDto>>> getProgramViewedDashboard() {
+        AppResponseDto.AppResponseDtoBuilder<List<ProgramMobileResponseDto>> builder = AppResponseDto.builder();
+        return ResponseEntity.ok(builder.data(getProgramsViewedForMobileDashBoard()).build());
+    }
+
+    /**
+     * * Retrieves the top 3 shorts and events for the mobile dashboard.
+     *
+     * @return ResponseEntity containing the dashboard data
+     */
+    @Tag(name = "Dashboard")
+    @GetMapping("/dashboard/shorts/recents")
+    @Operation(summary = "Get Shorts Dashboard", description = "Get the recent shorts for the mobile dashboard.")
+    public ResponseEntity<AppResponseDto<List<ShortsMobileResponseDto>>> getShortsViewedDashboard() {
+        AppResponseDto.AppResponseDtoBuilder<List<ShortsMobileResponseDto>> builder = AppResponseDto.builder();
+        return ResponseEntity.ok(builder.data(getShortsViewedForMobileDashboard()).build());
+    }
+
+    /**
      * Retrieves the top 3 events for the mobile dashboard.
      *
      * @return ResponseEntity containing the dashboard data
@@ -793,6 +850,49 @@ public class MobileController {
      */
     private List<ShortsMobileResponseDto> getShortsForMobileDashboard() {
         return shortsService.getTop3Shorts().stream()
+                .map(shortsEntity -> ShortsMobileResponseDto.builder().shortsId(shortsEntity.getShortsId())
+                        .shortsName(shortsEntity.getShortsName())
+                        .shortsBannerExternalUrl(shortsEntity.getShortsBannerExternalUrl())
+                        .shortsBannerStorageUrl(storageService.getStorageUrl(shortsEntity.getShortsBannerStorageId()))
+                        .shortsDescription(shortsEntity.getShortsDescription()).build())
+                .toList();
+    }
+
+    /**
+     * Retrieves the top 3 practices for the mobile dashboard.
+     *
+     * @return a list of PracticeResponseDto containing the top 3 practices
+     */
+    private List<PracticeMobileResponseDto> getPracticesViewedForMobileDashboard() {
+        return practiceService.getViewedPractices().stream()
+                .map(practiceEntity -> PracticeMobileResponseDto.builder().practiceId(practiceEntity.getPracticeId())
+                        .practiceName(practiceEntity.getPracticeName())
+                        .practiceIconExternalUrl(practiceEntity.getPracticeIconExternalUrl())
+                        .practiceIconStorageUrl(storageService.getStorageUrl(practiceEntity.getPracticeIconStorageId()))
+                        .practiceDescription(practiceEntity.getPracticeDescription()).build())
+                .toList();
+    }
+
+    /**
+     * Retrieves the top 3 programs for the mobile dashboard.
+     *
+     * @return a list of ProgramResponseDto containing the top 3 programs
+     */
+    private List<ProgramMobileResponseDto> getProgramsViewedForMobileDashBoard() {
+        return programService.getViewedPrograms().stream().map(programEntity -> ProgramMobileResponseDto.builder()
+                .programId(programEntity.getProgramId()).programName(programEntity.getProgramName())
+                .programBannerExternalUrl(programEntity.getProgramBannerExternalUrl())
+                .programBannerStorageUrl(storageService.getStorageUrl(programEntity.getProgramBannerStorageId()))
+                .programDescription(programEntity.getProgramDescription()).build()).toList();
+    }
+
+    /**
+     * Retrieves the top 3 shorts for the mobile dashboard.
+     *
+     * @return a list of ShortsResponseDto containing the top 3 shorts
+     */
+    private List<ShortsMobileResponseDto> getShortsViewedForMobileDashboard() {
+        return shortsService.getViewedShorts().stream()
                 .map(shortsEntity -> ShortsMobileResponseDto.builder().shortsId(shortsEntity.getShortsId())
                         .shortsName(shortsEntity.getShortsName())
                         .shortsBannerExternalUrl(shortsEntity.getShortsBannerExternalUrl())

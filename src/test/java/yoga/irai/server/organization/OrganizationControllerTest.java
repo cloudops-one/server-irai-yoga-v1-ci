@@ -1,6 +1,5 @@
 package yoga.irai.server.organization;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +27,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class OrganizationControllerTest {
+class OrganizationControllerTest {
     @Mock
     private UserService userService;
     @Mock
@@ -40,7 +39,6 @@ public class OrganizationControllerTest {
     private OrganizationRequestDto organizationRequestDto;
 
     private OrganizationEntity organizationEntity;
-    private OrganizationDropdownDto organizationDropdownDto;
     private UUID orgId;
     @BeforeEach
     void setup(){
@@ -71,8 +69,8 @@ public class OrganizationControllerTest {
                 .bankName("Indian overseas bank")
                 .bankAccountNumber("565618151564256150231")
                 .bankAccountType("Savings")
-                .bankIdentifierCode("IOBA")
-                .bankBranch("Ramapuram")
+                .bankIdentifierCode("IO_BA")
+                .bankBranch("Test")
                 .bankAddress(UUID.randomUUID().toString())
                 .bankCurrency(UUID.randomUUID().toString())
                 .taxIdentificationNumber(UUID.randomUUID().toString())
@@ -101,8 +99,8 @@ public class OrganizationControllerTest {
                 .bankName("Indian overseas bank")
                 .bankAccountNumber("565618151564256150231")
                 .bankAccountType("Savings")
-                .bankIdentifierCode("IOBA")
-                .bankBranch("Ramapuram")
+                .bankIdentifierCode("Test")
+                .bankBranch("Test")
                 .bankAddress(UUID.randomUUID().toString())
                 .bankCurrency(UUID.randomUUID().toString())
                 .taxIdentificationNumber(UUID.randomUUID().toString())
@@ -115,29 +113,34 @@ public class OrganizationControllerTest {
         when(organizationService.addOrganization(organizationRequestDto)).thenReturn(organizationEntity);
         ResponseEntity<AppResponseDto<OrganizationResponseDto>> response = organizationController.addOrganization(organizationRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void updateOrganizationTest(){
         when(organizationService.updateOrganization(orgId, organizationRequestDto)).thenReturn(organizationEntity);
         ResponseEntity<AppResponseDto<OrganizationResponseDto>> response = organizationController.updateOrganization(orgId, organizationRequestDto);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void getOrganizationById(){
         when(organizationService.getOrganizationById(orgId)).thenReturn(organizationEntity);
         ResponseEntity<AppResponseDto<OrganizationResponseDto>> response = organizationController.getOrganizationById(orgId);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void updateOrganizationStatusTest(){
     doNothing().when(organizationService).updateOrganizationStatus(orgId, AppUtils.OrganizationStatus.ACTIVE);
         ResponseEntity<AppResponseDto<Void>> response = organizationController.updateOrganizationStatus(orgId , AppUtils.OrganizationStatus.ACTIVE);
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void getPortalDashboardTest(){
         ResponseEntity<AppResponseDto<TotalDto>> response = organizationController.getPortalDashboard();
         assert response.getStatusCode() == HttpStatus.OK;
+        assertNotNull(response.getBody());
     }
     @Test
     void getOrganizationsTest(){
@@ -146,7 +149,38 @@ public class OrganizationControllerTest {
         String sortBy = "id";
         Sort.Direction direction = Sort.Direction.DESC;
         String keyword = "test";
+        List<OrganizationEntity> orgList = List.of(organizationEntity);
+        Page<OrganizationEntity> organizationEntityPage = new PageImpl<>(orgList);
 
+        when(organizationService.getOrganizations(pageNumber, pageSize, sortBy,
+                direction, keyword)).thenReturn(organizationEntityPage);
+
+        Map<UUID, String> userNamesByIds = new HashMap<>();
+        userNamesByIds.put(organizationEntity.getCreatedBy(), "Hilton");
+        userNamesByIds.put(organizationEntity.getUpdatedBy(), "Paul");
+        when(userService.getUserNamesByIds(anyList())).thenReturn(userNamesByIds);
+
+        Map<UUID, String> orgIconStorageUrlByIds = new HashMap<>();
+        orgIconStorageUrlByIds.put(organizationEntity.getOrgIconStorageId(), "https://www.google.com");
+        when(storageService.getSignedStorageUrlByIds(anyList())).thenReturn(orgIconStorageUrlByIds);
+
+        ResponseEntity<AppResponseDto<List<OrganizationResponseDto>>> response =
+                organizationController.getOrganizations(pageNumber, pageSize, sortBy, direction, keyword);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        assertNotNull(response.getBody());
+    }
+    @Test
+    void getOrganizationsTest_IfCondition(){
+        int pageNumber = 2 ;
+        int pageSize = 3;
+        String sortBy = "id";
+        Sort.Direction direction = Sort.Direction.DESC;
+        String keyword = "test";
+        organizationEntity.setOrgIconStorageId(null);
+        organizationEntity.setCreatedBy(UUID.randomUUID());
+        organizationEntity.setUpdatedBy(UUID.randomUUID());
         List<OrganizationEntity> orgList = List.of(organizationEntity);
         Page<OrganizationEntity> organizationEntityPage = new PageImpl<>(orgList);
 

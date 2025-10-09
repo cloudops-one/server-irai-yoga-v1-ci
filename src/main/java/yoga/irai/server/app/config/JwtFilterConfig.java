@@ -90,7 +90,7 @@ public class JwtFilterConfig extends OncePerRequestFilter {
 
     }
 
-    private boolean checkForIssuer(String token, String issuerUrl) {
+    public boolean checkForIssuer(String token, String issuerUrl) {
         try {
             SignedJWT parsedJwt = (SignedJWT) JWTParser.parse(token);
             String issuer = parsedJwt.getJWTClaimsSet().getIssuer();

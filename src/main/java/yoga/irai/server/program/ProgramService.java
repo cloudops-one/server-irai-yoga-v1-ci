@@ -235,6 +235,13 @@ public class ProgramService {
                 AppUtils.ProgramStatus.ACTIVE);
     }
 
+    public List<ProgramEntity> getViewedPrograms() {
+        List<AppUtils.ProgramUserStatus> programStatus = List.of(AppUtils.ProgramUserStatus.IN_PROGRESS, AppUtils.ProgramUserStatus.STARTED);
+        List<UUID> programIds = programUserRepository.getProgramUserEntityByUserIdAndProgramUserStatusIn(
+                AppUtils.getPrincipalUserId(), programStatus).stream().map(ProgramUserEntity::getProgramId).toList();
+        return programRepository.findAllById(programIds);
+    }
+
     /**
      * Updates or creates a program user based on the provided request DTO.
      *
