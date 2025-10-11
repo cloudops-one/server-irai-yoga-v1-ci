@@ -1,4 +1,3 @@
-
 name: CI/CD Pipeline
 
 permissions:
@@ -20,12 +19,28 @@ jobs:
       docker_tag: ${{ steps.env.outputs.docker_tag }}
       branch_valid: ${{ steps.validation.outputs.valid }}
       domain: ${{ steps.domain.outputs.domain }}
+      branch_name: ${{ steps.branch.outputs.branch_name }}
     steps:
       - name: Checkout code
         uses: cloudops-one/checkout@v4
         
+      - name: Extract branch name
+        id: branch
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          elif [[ "$GITHUB_REF" == refs/pull/* ]]; then
+            BRANCH_NAME="${{ github.head_ref }}"
+          else
+            BRANCH_NAME="${{ github.ref_name }}"
+          fi
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "Using branch: $BRANCH_NAME"
+        
       - name: Determine environment and tag
         id: env
+        shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "environment=live" >> $GITHUB_OUTPUT
@@ -43,17 +58,24 @@ jobs:
           
       - name: Determine domain
         id: domain
+        shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo "domain=live-domain-config" >> $GITHUB_OUTPUT
+            echo "domain=live.irai.yoga" >> $GITHUB_OUTPUT
           elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
-            echo "domain=stage-domain-config" >> $GITHUB_OUTPUT
+            echo "domain=stage.irai.yoga" >> $GITHUB_OUTPUT
           else
-            echo "domain=preview-domain-config" >> $GITHUB_OUTPUT
+            # Generate dynamic preview domain: branch-name.server.irai.yoga
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+            PREVIEW_DOMAIN="${SANITIZED_BRANCH}.server.irai.yoga"
+            echo "domain=$PREVIEW_DOMAIN" >> $GITHUB_OUTPUT
+            echo "Using preview domain: $PREVIEW_DOMAIN"
           fi
           
       - name: Validate branch name and tag
         id: validation
+        shell: bash
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
           TAG_NAME="${GITHUB_REF#refs/tags/}"
@@ -127,6 +149,7 @@ jobs:
         
       - name: Detect build tool
         id: detect
+        shell: bash
         run: |
           if [ -f "pom.xml" ]; then
             echo "build-tool=maven" >> $GITHUB_OUTPUT
@@ -237,6 +260,7 @@ jobs:
       
       - name: Validate Docker tag format
         id: validate-tag
+        shell: bash
         run: |
           TAG="${{ needs.validate-branch.outputs.docker_tag }}"
           if [ -z "$TAG" ]; then
@@ -253,6 +277,7 @@ jobs:
           fi
           
       - name: Verify JAR file exists
+        shell: bash
         run: |
           echo "Checking for JAR files:"
           find . -name "*.jar" -type f | head -10
@@ -264,6 +289,7 @@ jobs:
           fi
           
       - name: Build Docker image
+        shell: bash
         run: |
           IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           echo "Building image: $IMAGE_TAG"
@@ -271,6 +297,7 @@ jobs:
           echo "Image built successfully"
           
       - name: Save Docker image
+        shell: bash
         run: |
           IMAGE_TAG="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
           docker save -o docker-image.tar $IMAGE_TAG
@@ -295,6 +322,7 @@ jobs:
           path: .
 
       - name: Load Docker image
+        shell: bash
         run: |
           docker load -i docker-image.tar
           echo "Loaded images:"
@@ -322,6 +350,7 @@ jobs:
           path: .
 
       - name: Load Docker image
+        shell: bash
         run: |
           # Load the image from the tar file
           docker load -i docker-image.tar
@@ -329,12 +358,16 @@ jobs:
           # Verify the image was loaded
           echo "Loaded images:"
           docker images
+          
       - name: Login to Harbor Registry
+        shell: bash
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login "${{ secrets.HARBOR_REGISTRY }}" \
             --username "${{ secrets.HARBOR_USERNAME }}" \
             --password-stdin
+          
       - name: Tag and push Docker image
+        shell: bash
         run: |
           # Local image built in docker-build step
           LOCAL_IMAGE="server-irai-yoga-v1-ci:${{ needs.validate-branch.outputs.docker_tag }}"
@@ -345,8 +378,10 @@ jobs:
           echo "Pushing: $REMOTE_IMAGE"
           docker push "$REMOTE_IMAGE"
           echo "✅ Server image pushed successfully"
+          
       - name: Logout from Harbor Registry
         if: always()
+        shell: bash
         run: |
           docker logout "${{ secrets.HARBOR_REGISTRY }}" || echo "Logout failed or already logged out"
 
@@ -369,6 +404,7 @@ jobs:
           path: devops-ci
 
       - name: Update image tag in deployment file
+        shell: bash
         run: |
           # Get the deployment file path based on environment
           if [[ "${{ needs.validate-branch.outputs.environment }}" == "live" ]]; then
@@ -389,12 +425,95 @@ jobs:
           echo "Updated deployment file content:"
           grep -n "image:" "$DEPLOYMENT_FILE"
 
+      - name: Deploy Service and Deployment (Preview only)
+        if: needs.validate-branch.outputs.environment == 'preview'
+        uses: cloudops-one/devops-ci/.github/actions/k8s-service-deployment@main
+        with:
+          do-token: ${{ secrets.DO_API_TOKEN }}
+          cluster-name: "k8s"
+          namespace: irai-yoga-v1-preview
+          project-type: "server"
+          branch-name: ${{ needs.validate-branch.outputs.branch_name }}
+          port: "80"
+          target-port: "8080"
+
+      - name: Update deployment placeholders (Preview only)
+        if: needs.validate-branch.outputs.environment == 'preview'
+        shell: bash
+        run: |
+          DEPLOYMENT_FILE="devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml"
+          SANITIZED_BRANCH=$(echo "${{ needs.validate-branch.outputs.branch_name }}" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          DEPLOYMENT_NAME="${SANITIZED_BRANCH}-server-deployment"
+          SELECTOR_APP="${SANITIZED_BRANCH}-server"
+          CONTAINER_NAME="${SANITIZED_BRANCH}-server-container"
+          
+          echo "🔄 Updating deployment placeholders in: $DEPLOYMENT_FILE"
+          echo "   Deployment Name: $DEPLOYMENT_NAME"
+          echo "   Selector App: $SELECTOR_APP"
+          echo "   Container Name: $CONTAINER_NAME"
+          
+          # Update placeholders
+          sed -i "s|DEPLOYMENT_NAME_PLACEHOLDER|$DEPLOYMENT_NAME|g" "$DEPLOYMENT_FILE"
+          sed -i "s|SELECTOR_APP_PLACEHOLDER|$SELECTOR_APP|g" "$DEPLOYMENT_FILE"
+          sed -i "s|SERVER_CONTAINER_PLACEHOLDER|$CONTAINER_NAME|g" "$DEPLOYMENT_FILE"
+          
+          echo "✅ Deployment file updated"
+
       - name: Deploy to Kubernetes
         uses: cloudops-one/devops-ci/.github/actions/k8s-deployment@main
         with:
           do-token: ${{ secrets.DO_API_TOKEN }}
           cluster-name: "k8s"
-          namespace: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-stage' || 'irai-yoga-v1-preview' }}
-          deployment-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
-          container-name: ${{ needs.validate-branch.outputs.environment == 'live' && 'irai-yoga-v1-server-live' || needs.validate-branch.outputs.environment == 'stage' && 'irai-yoga-v1-server-stage' || 'irai-yoga-v1-server-preview' }}
+          namespace: irai-yoga-v1-preview  # ✅ FIXED: Changed from "preview" to "irai-yoga-v1-preview"
           deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-server/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-server/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml' }}
+
+      - name: Deploy Ingress and Create DNS (Preview only)
+        if: needs.validate-branch.outputs.environment == 'preview'
+        uses: cloudops-one/devops-ci/.github/actions/k8s-ingress-deployment@main
+        with:
+          do-token: ${{ secrets.DO_API_TOKEN }}
+          cluster-name: "k8s"
+          namespace: irai-yoga-v1-preview
+          project-type: "server"
+          preview-domain: ${{ needs.validate-branch.outputs.domain }}
+          branch-name: ${{ needs.validate-branch.outputs.branch_name }}
+          aws-access-key-id: ${{ secrets.ROUTE53_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.ROUTE53_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.ROUTE53_REGION }}
+          aws-hosted-zone-id: ${{ secrets.ROUTE53_HOSTED_ZONE_ID }}
+
+  notify-deployment:
+    needs: [deploy, validate-branch]
+    if: needs.validate-branch.outputs.branch_valid == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.validate-branch.outputs.environment }}
+    
+    steps:
+      - name: Determine webhook URL and deployment details
+        id: webhook
+        shell: bash
+        run: |
+          if [ "${{ needs.validate-branch.outputs.environment }}" = "preview" ]; then
+            echo "webhook_url=${{ secrets.ZOHO_CLIQ_WEBHOOK_PREVIEW }}" >> $GITHUB_OUTPUT
+            echo "env_display=Preview 🚀" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.validate-branch.outputs.environment }}" = "stage" ]; then
+            echo "webhook_url=${{ secrets.ZOHO_CLIQ_WEBHOOK_STAGE }}" >> $GITHUB_OUTPUT
+            echo "env_display=Stage 🔧" >> $GITHUB_OUTPUT
+          else
+            echo "webhook_url=${{ secrets.ZOHO_CLIQ_WEBHOOK_LIVE }}" >> $GITHUB_OUTPUT
+            echo "env_display=Live 🎯" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Notify Deployment
+        if: always()
+        uses: cloudops-one/devops-ci/.github/actions/notify@main
+        with:
+          message: "Deployment"
+          environment: ${{ needs.validate-branch.outputs.environment }}
+          status: ${{ job.status }}
+          service-type: "server"
+        env:
+          ZOHO_WEBHOOK_PREVIEW: ${{ secrets.ZOHO_WEBHOOK_PREVIEW }}
+          ZOHO_WEBHOOK_STAGE: ${{ secrets.ZOHO_WEBHOOK_STAGE }}
+          ZOHO_WEBHOOK_LIVE: ${{ secrets.ZOHO_WEBHOOK_LIVE }}
