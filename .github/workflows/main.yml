@@ -30,7 +30,7 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/heads/* ]]; then
             BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          elif [[ "$GITHUB_REF" == refs/pull/* ]]; then
+          elif [[ "$GITHB_REF" == refs/pull/* ]]; then
             BRANCH_NAME="${{ github.head_ref }}"
           else
             BRANCH_NAME="${{ github.ref_name }}"
@@ -464,7 +464,7 @@ jobs:
         with:
           do-token: ${{ secrets.DO_API_TOKEN }}
           cluster-name: "k8s"
-          namespace: irai-yoga-v1-preview  # ✅ FIXED: Changed from "preview" to "irai-yoga-v1-preview"
+          namespace: irai-yoga-v1-preview
           deployment-file: ${{ needs.validate-branch.outputs.environment == 'live' && 'devops-ci/k8s/live/irai-yoga-v1-server/deployment.yaml' || needs.validate-branch.outputs.environment == 'stage' && 'devops-ci/k8s/stage/irai-yoga-v1-server/deployment.yaml' || 'devops-ci/k8s/preview/irai-yoga-v1-server/deployment.yaml' }}
 
       - name: Deploy Ingress and Create DNS (Preview only)
@@ -477,6 +477,11 @@ jobs:
           project-type: "server"
           preview-domain: ${{ needs.validate-branch.outputs.domain }}
           branch-name: ${{ needs.validate-branch.outputs.branch_name }}
+          # ✅ WILDCARD CERTIFICATE CONFIGURATION FOR SERVER
+          use-wildcard-cert: 'true'
+          wildcard-domain: '*.server.irai.yoga'
+          wildcard-secret-name: 'wildcard-server-irai-yoga-tls'
+          # DNS configuration
           aws-access-key-id: ${{ secrets.ROUTE53_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.ROUTE53_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.ROUTE53_REGION }}
